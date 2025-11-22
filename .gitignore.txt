@@ -1,0 +1,71 @@
+===============================================
+
+1. DEPENDENCIES & BUILD ARTIFACTS (Frontend/Node)
+
+===============================================
+
+Node Modules - MUST be ignored for any Node/React project
+
+../web-client/node_modules
+
+Production build output
+
+../web-client/dist
+
+Log files
+
+.log
+npm-debug.log
+yarn-debug.log*
+yarn-error.log*
+
+===============================================
+
+2. DEPENDENCIES & VIRTUAL ENVIRONMENTS (Python/FastAPI)
+
+===============================================
+
+Virtual environment directory (common names)
+
+.venv
+venv/
+env/
+
+Python compiled files
+
+pycache/
+*.pyc
+
+Distribution/packaging
+
+dist/
+build/
+*.egg-info/
+
+===============================================
+
+3. ENVIRONMENT & SECRETS (Local/Sensitive Data)
+
+===============================================
+
+Files containing environment variables/API keys
+
+.env
+.flaskenv
+
+===============================================
+
+4. IDE & EDITOR FILES (VS Code/Operating System)
+
+===============================================
+
+VS Code specific settings (usually safe to ignore)
+
+.vscode/*
+!.vscode/settings.json # Optional: keep team-wide VS Code settings
+!.vscode/extensions.json # Optional: keep recommended extensions
+
+Operating System files (Mac and Windows)
+
+.DS_Store
+Thumbs.db
