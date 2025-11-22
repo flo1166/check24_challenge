@@ -1,0 +1,142 @@
+/* ========================================= */
+/* 1. CSS RESETS & NORMALIZATION             */
+/* ========================================= */
+
+/* Box-sizing Border-box for simpler layout management */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Remove default margin */
+body,
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+blockquote,
+dl,
+dd {
+  margin: 0;
+}
+
+/* Set up the body */
+body {
+  min-height: 100vh;
+  line-height: 1.5;
+  text-rendering: optimizeSpeed; /* Prioritize rendering speed */
+  -webkit-font-smoothing: antialiased; /* Better font smoothing on Mac/iOS */
+}
+
+/* A elements that don't have a class get default styles */
+a:not([class]) {
+  text-decoration-skip-ink: auto;
+}
+
+/* Make images easier to work with */
+img,
+picture {
+  max-width: 100%;
+  display: block;
+}
+
+/* Inherit fonts for form controls */
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+/* ========================================= */
+/* 2. CSS VARIABLES (Design Tokens)          */
+/* ========================================= */
+
+:root {
+  /* Colors */
+  --color-primary: #007bff;     /* Blue */
+  --color-secondary: #6c757d;   /* Gray */
+  --color-success: #28a745;     /* Green */
+  --color-error: #dc3545;       /* Red */
+  --color-background: #f8f9fa;  /* Light Gray background */
+  --color-text: #212529;        /* Dark text */
+  --color-white: #ffffff;
+
+  /* Typography */
+  --font-family-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-size-base: 16px;
+  --line-height-base: 1.5;
+  
+  /* Spacing (Using a simple 8px scale) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 48px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+}
+
+/* ========================================= */
+/* 3. GLOBAL BASE STYLES                     */
+/* ========================================= */
+
+html {
+  font-size: var(--font-size-base);
+}
+
+body {
+  font-family: var(--font-family-sans);
+  color: var(--color-text);
+  background-color: var(--color-background);
+  padding: var(--space-md);
+}
+
+/* Headings */
+h1, h2, h3, h4 {
+  line-height: 1.2;
+  margin-bottom: var(--space-md);
+  font-weight: 600;
+}
+h1 { font-size: 2.5rem; }
+h2 { font-size: 2rem; }
+h3 { font-size: 1.5rem; }
+h4 { font-size: 1.2rem; }
+
+/* Links */
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* ========================================= */
+/* 4. UTILITY CLASSES                        */
+/* ========================================= */
+
+.text-center {
+  text-align: center !important;
+}
+
+.text-primary {
+  color: var(--color-primary) !important;
+}
+
+.bg-white {
+  background-color: var(--color-white) !important;
+}
+
+.p-md {
+  padding: var(--space-md) !important;
+}
+
+.m-lg {
+  margin: var(--space-lg) !important;
+}
