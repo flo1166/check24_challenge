@@ -1,0 +1,14 @@
+App.jsx is your main application shell (where routes, providers, and layout go). Example: Vite + React 
+
+🚀 As Your Project Grows...
+
+When things scale even further (teams, business complexity, domains), you can transition to a feature-sliced or domain-driven structure:
+
+src/
+├── entities/      // business models like User, Post
+├── features/      // login, comment, create post
+├── shared/        // shared components, hooks, utils
+├── widgets/       // composed UI units (e.g., Header, Sidebar)
+├── pages/
+├── processes/     // flows (e.g., sign-in flow)
+
