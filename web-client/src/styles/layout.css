@@ -1,0 +1,199 @@
+/**
+ * =========================================================================
+ * CHECK24 LAYOUT SYSTEM - GRID & FLEXBOX
+ * =========================================================================
+ * Modern responsive grid system replacing the old 12-column fixed-width design.
+ */
+
+/* ========== 12-COLUMN GRID SYSTEM ========== */
+
+.c24-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--c24-spacing-md);
+  width: 100%;
+}
+
+.c24-grid-col-1 { grid-column: span 1; }
+.c24-grid-col-2 { grid-column: span 2; }
+.c24-grid-col-3 { grid-column: span 3; }
+.c24-grid-col-4 { grid-column: span 4; }
+.c24-grid-col-5 { grid-column: span 5; }
+.c24-grid-col-6 { grid-column: span 6; }
+.c24-grid-col-7 { grid-column: span 7; }
+.c24-grid-col-8 { grid-column: span 8; }
+.c24-grid-col-9 { grid-column: span 9; }
+.c24-grid-col-10 { grid-column: span 10; }
+.c24-grid-col-11 { grid-column: span 11; }
+.c24-grid-col-12 { grid-column: span 12; }
+
+/* ========== CONTAINER & PAGE STRUCTURE ========== */
+
+.c24-page-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-width: 320px;
+}
+
+.c24-page-container {
+  flex: 1 0 auto;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 var(--c24-spacing-md);
+  width: 100%;
+}
+
+.c24-page-footer {
+  flex-shrink: 0;
+}
+
+/* ========== FLEXBOX UTILITIES ========== */
+
+.c24-flex {
+  display: flex;
+}
+
+.c24-flex-row {
+  flex-direction: row;
+}
+
+.c24-flex-col {
+  flex-direction: column;
+}
+
+.c24-flex-center {
+  align-items: center;
+  justify-content: center;
+}
+
+.c24-flex-between {
+  justify-content: space-between;
+}
+
+.c24-flex-around {
+  justify-content: space-around;
+}
+
+.c24-flex-items-center {
+  align-items: center;
+}
+
+.c24-flex-items-start {
+  align-items: flex-start;
+}
+
+.c24-flex-items-end {
+  align-items: flex-end;
+}
+
+.c24-flex-wrap {
+  flex-wrap: wrap;
+}
+
+.c24-flex-1 {
+  flex: 1;
+}
+
+.c24-flex-none {
+  flex: none;
+}
+
+/* ========== SPACING UTILITIES ========== */
+
+.c24-p-0 { padding: 0; }
+.c24-p-xs { padding: var(--c24-spacing-xs); }
+.c24-p-sm { padding: var(--c24-spacing-sm); }
+.c24-p-md { padding: var(--c24-spacing-md); }
+.c24-p-lg { padding: var(--c24-spacing-lg); }
+.c24-p-xl { padding: var(--c24-spacing-xl); }
+
+.c24-px-md { padding-left: var(--c24-spacing-md); padding-right: var(--c24-spacing-md); }
+.c24-py-md { padding-top: var(--c24-spacing-md); padding-bottom: var(--c24-spacing-md); }
+
+.c24-m-0 { margin: 0; }
+.c24-m-xs { margin: var(--c24-spacing-xs); }
+.c24-m-sm { margin: var(--c24-spacing-sm); }
+.c24-m-md { margin: var(--c24-spacing-md); }
+.c24-m-lg { margin: var(--c24-spacing-lg); }
+.c24-m-xl { margin: var(--c24-spacing-xl); }
+
+.c24-mb-md { margin-bottom: var(--c24-spacing-md); }
+.c24-mt-md { margin-top: var(--c24-spacing-md); }
+.c24-ml-md { margin-left: var(--c24-spacing-md); }
+.c24-mr-md { margin-right: var(--c24-spacing-md); }
+
+/* ========== RESPONSIVE GRID ========== */
+
+@media (max-width: 1024px) {
+  .c24-grid-col-8 { grid-column: span 12; }
+  .c24-grid-col-7 { grid-column: span 12; }
+  .c24-grid-col-6 { grid-column: span 6; }
+  .c24-grid-col-5 { grid-column: span 6; }
+}
+
+@media (max-width: 768px) {
+  .c24-page-container {
+    padding: 0 var(--c24-spacing-sm);
+  }
+  
+  .c24-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--c24-spacing-sm);
+  }
+  
+  .c24-grid-col-1,
+  .c24-grid-col-2,
+  .c24-grid-col-3,
+  .c24-grid-col-4,
+  .c24-grid-col-5,
+  .c24-grid-col-6,
+  .c24-grid-col-7,
+  .c24-grid-col-8,
+  .c24-grid-col-9,
+  .c24-grid-col-10,
+  .c24-grid-col-11,
+  .c24-grid-col-12 {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .c24-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .c24-flex-col-mobile {
+    flex-direction: column;
+  }
+  
+  .c24-grid-col-1,
+  .c24-grid-col-2,
+  .c24-grid-col-3,
+  .c24-grid-col-4,
+  .c24-grid-col-5,
+  .c24-grid-col-6 {
+    grid-column: span 1;
+  }
+}
+
+/* ========== SECTION & CONTAINER UTILITIES ========== */
+
+.c24-section {
+  padding: var(--c24-spacing-lg) 0;
+  border-bottom: 1px solid var(--c24-border-gray);
+}
+
+.c24-section:last-child {
+  border-bottom: none;
+}
+
+.c24-container-tight {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.c24-container-wide {
+  max-width: 1440px;
+  margin: 0 auto;
+}

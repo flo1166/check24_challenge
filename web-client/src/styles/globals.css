@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-c24 text-c24-sm text-c24-text-dark bg-white;
+  }
+
+  h1 {
+    @apply text-c24-5xl font-bold mb-6 text-c24-text-dark;
+  }
+
+  h2 {
+    @apply text-c24-4xl font-bold mb-4 text-c24-text-dark;
+  }
+
+  h3 {
+    @apply text-c24-3xl font-bold mb-4 text-c24-text-dark;
+  }
+
+  h4 {
+    @apply text-c24-2xl font-bold mb-2 text-c24-text-dark;
+  }
+
+  h5 {
+    @apply text-c24-lg font-bold mb-2 text-c24-text-dark;
+  }
+
+  h6 {
+    @apply text-c24-base font-bold mb-2 text-c24-text-dark;
+  }
+
+  p {
+    @apply text-c24-base leading-relaxed mb-4;
+  }
+
+  a {
+    @apply text-c24-primary-medium no-underline transition-colors duration-200;
+  }
+
+  a:hover {
+    @apply text-c24-hover-blue underline;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply font-c24 text-c24-base leading-6;
+  }
+
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="date"],
+  select,
+  textarea {
+    @apply block w-full px-[5px] py-[10px] border border-c24-border-gray rounded-c24-sm text-c24-base leading-6 transition-colors duration-200;
+  }
+
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="number"]:focus,
+  input[type="tel"]:focus,
+  input[type="date"]:focus,
+  select:focus,
+  textarea:focus {
+    @apply border-c24-focus-blue outline-none ring-2 ring-c24-focus-blue ring-opacity-10;
+  }
+}
+
+@layer components {
+  .sr-only {
+    @apply absolute w-1 h-1 p-0 -m-1 overflow-hidden clip whitespace-nowrap border-0;
+  }
+
+  .truncate {
+    @apply overflow-hidden text-ellipsis whitespace-nowrap;
+  }
+
+  /* Scrollbar Styling */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-c24-light-gray;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-c24-border-gray rounded;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-c24-primary-medium;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 300ms ease-in-out forwards;
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown 300ms ease-in-out forwards;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 300ms ease-in-out forwards;
+}

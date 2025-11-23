@@ -1,0 +1,116 @@
+/**
+ * =========================================================================
+ * CHECK24 THEME VARIABLES & COLOR PALETTE
+ * =========================================================================
+ * CSS Custom Properties (Variables) for consistent theming across the app.
+ */
+
+:root {
+  /* ========== PRIMARY COLORS ========== */
+  --c24-primary-deep: #022D94;
+  --c24-primary-medium: #0563C1;
+  --c24-primary-light: #0578E1;
+  
+  /* ========== ACCENT COLORS ========== */
+  --c24-alert-red: #e30613;
+  --c24-highlight-yellow: #FFBB1C;
+  
+  /* ========== NEUTRAL COLORS ========== */
+  --c24-white: #ffffff;
+  --c24-black: #000000;
+  --c24-text-dark: #181818;
+  --c24-text-muted: #666;
+  --c24-border-gray: #949494;
+  --c24-light-gray: #f5f5f5;
+  --c24-gray-200: #eeeeee;
+  --c24-gray-300: #dddddd;
+  
+  /* ========== STATE COLORS ========== */
+  --c24-hover-blue: #064E9C;
+  --c24-focus-blue: #005ea8;
+  --c24-success-green: #22c55e;
+  --c24-warning-orange: #f97316;
+  --c24-error-red: #dc2626;
+  
+  /* ========== SPACING & SIZING ========== */
+  --c24-spacing-xs: 4px;
+  --c24-spacing-sm: 8px;
+  --c24-spacing-md: 16px;
+  --c24-spacing-lg: 24px;
+  --c24-spacing-xl: 32px;
+  --c24-spacing-2xl: 48px;
+  
+  /* ========== BORDER RADIUS ========== */
+  --c24-radius-none: 0;
+  --c24-radius-sm: 3px;
+  --c24-radius-md: 6px;
+  --c24-radius-lg: 12px;
+  
+  /* ========== SHADOWS ========== */
+  --c24-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --c24-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --c24-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --c24-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  
+  /* ========== TRANSITIONS ========== */
+  --c24-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --c24-transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --c24-transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* ========== Z-INDEX SCALE ========== */
+  --c24-z-dropdown: 100;
+  --c24-z-sticky: 200;
+  --c24-z-fixed: 300;
+  --c24-z-modal: 400;
+  --c24-z-tooltip: 500;
+  
+  /* ========== CONTAINER QUERIES ========== */
+  --c24-container-sm: 640px;
+  --c24-container-md: 768px;
+  --c24-container-lg: 1024px;
+  --c24-container-xl: 1280px;
+  --c24-container-2xl: 1536px;
+}
+
+/* ========== DARK MODE (Optional) ========== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c24-white: #1a1a1a;
+    --c24-text-dark: #f0f0f0;
+    --c24-text-muted: #a0a0a0;
+    --c24-border-gray: #444;
+    --c24-light-gray: #2a2a2a;
+    --c24-gray-200: #333;
+    --c24-gray-300: #444;
+  }
+}
+
+/* ========== SEMANTIC CLASS NAMING ========== */
+
+.c24-bg-primary {
+  background-color: var(--c24-primary-deep);
+}
+
+.c24-text-primary {
+  color: var(--c24-primary-medium);
+}
+
+.c24-border-primary {
+  border-color: var(--c24-primary-medium);
+}
+
+.c24-bg-alert {
+  background-color: var(--c24-alert-red);
+}
+
+.c24-text-alert {
+  color: var(--c24-alert-red);
+}
+
+.c24-bg-light {
+  background-color: var(--c24-light-gray);
+}
+
+.c24-text-muted {
+  color: var(--c24-text-muted);
+}

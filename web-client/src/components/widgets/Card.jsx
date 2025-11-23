@@ -1,58 +1,108 @@
-import React from 'react';
+/**
+ * =========================================================================
+ * Card.jsx - Card Widget Component
+ * =========================================================================
+ * Displays a single product/deal card with image, title, description,
+ * and call-to-action button. Fully styled according to Check24 design.
+ */
 
-// Card.jsx - Defensive component that handles missing or malformed data
+import React, { useState } from 'react';
+import { Heart, ShoppingCart } from 'lucide-react';
+import { useNotifications } from '../../contexts/NotificationContext';
 
 export default function Card({ data }) {
-  // Debug: Log what we're receiving
-  console.log("Card component received:", JSON.stringify(data, null, 2));
+  const { updateNotification } = useNotifications();
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isAdded, setIsAdded] = useState(false);
 
-  // Defensive checks - handle undefined, null, or missing properties
-  if (!data) {
-    console.warn("Card: data is undefined or null");
-    return (
-      <div className="card p-4 bg-gray-100 border border-gray-300 rounded">
-        <p className="text-gray-500">No data available</p>
-      </div>
-    );
-  }
+  // Safely extract data with fallbacks
+  const title = data?.title || 'Untitled';
+  const subtitle = data?.subtitle || '';
+  const content = data?.content || 'No description available';
+  const imageUrl = data?.image_url || '';
+  const ctaLink = data?.cta_link || '#';
 
-  // Safely access nested properties with fallbacks
-  const title = data?.data?.title || data?.title || "Untitled";
-  const content = data?.data?.content || data?.content || "No description available";
-  const subtitle = data?.data?.subtitle || data?.subtitle || "";
-  const imageUrl = data?.data?.image_url || data?.image_url || "";
-  const ctaLink = data?.data?.cta_link || data?.cta_link || "#";
+  /**
+   * Handle adding item to cart
+   * Updates global notification count
+   */
+  const handleAddToCart = () => {
+    updateNotification('cart', 1);
+    setIsAdded(true);
+    setTimeout(() => setIsAdded(false), 2000); // Reset after 2s
+  };
+
+  /**
+   * Handle favorite toggle
+   */
+  const handleFavorite = () => {
+    const increment = isFavorite ? -1 : 1;
+    updateNotification('favorites', increment);
+    setIsFavorite(!isFavorite);
+  };
 
   return (
-    <div className="card p-6 bg-white border border-gray-200 rounded-lg shadow-md hover:shadow-lg transition-shadow">
-      {/* Image */}
-      {imageUrl && (
-        <img
-          src={imageUrl}
-          alt={title}
-          className="w-full h-48 object-cover rounded-md mb-4"
-          onError={(e) => {
-            e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect fill='%23ddd' width='400' height='200'/%3E%3Ctext x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='16' fill='%23999'%3EImage not found%3C/text%3E%3C/svg%3E";
-          }}
-        />
-      )}
+    <div className="bg-white rounded-c24-md shadow-c24-md hover:shadow-c24-lg transition-all duration-200 overflow-hidden border border-c24-border-gray hover:border-c24-primary-medium hover:-translate-y-0.5">
+      {/* Image Container */}
+      <div className="relative h-56 overflow-hidden bg-c24-light-gray group">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+            onError={(e) => {
+              e.target.src =
+                'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22240%22%3E%3Crect fill=%22%23f5f5f5%22 width=%22400%22 height=%22240%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-family=%22Arial%22 font-size=%2216%22 fill=%22%23999%22%3ENo image available%3C/text%3E%3C/svg%3E';
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-c24-text-muted">
+            <span>No Image</span>
+          </div>
+        )}
 
-      {/* Title */}
-      <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
-
-      {/* Subtitle */}
-      {subtitle && <p className="text-sm text-gray-600 mb-3 italic">{subtitle}</p>}
+        {/* Overlay Actions */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end justify-end p-3">
+          <button
+            onClick={handleFavorite}
+            className={`rounded-full w-10 h-10 flex items-center justify-center transition-all ${
+              isFavorite
+                ? 'bg-c24-alert-red text-white'
+                : 'bg-white text-c24-text-dark hover:bg-c24-light-gray'
+            }`}
+            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
+          </button>
+        </div>
+      </div>
 
       {/* Content */}
-      <p className="text-gray-700 mb-4 line-clamp-3">{content}</p>
+      <div className="p-4 flex flex-col flex-1">
+        {/* Title */}
+        <h3 className="text-base font-bold text-c24-text-dark mb-2 line-clamp-2">{title}</h3>
 
-      {/* CTA Button */}
-      <a
-        href={ctaLink}
-        className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md font-semibold hover:bg-blue-700 transition-colors"
-      >
-        Learn More
-      </a>
+        {/* Subtitle */}
+        {subtitle && <p className="text-xs font-semibold text-c24-primary-medium mb-2">{subtitle}</p>}
+
+        {/* Description */}
+        <p className="text-c24-sm text-c24-text-muted mb-4 line-clamp-3 leading-relaxed flex-1">{content}</p>
+
+        {/* Footer with Button */}
+        <div className="mt-auto">
+          <button
+            onClick={handleAddToCart}
+            className={`w-full px-4 py-3 rounded-c24-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
+              isAdded
+                ? 'bg-green-500 text-white'
+                : 'bg-c24-primary-medium text-white hover:bg-c24-hover-blue'
+            }`}
+          >
+            <ShoppingCart size={16} />
+            {isAdded ? 'Added!' : 'Add to Cart'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,10 +1,20 @@
-import React, { StrictMode } from 'react' // Import React and StrictMode
-import { createRoot } from 'react-dom/client'
-import './styles/index.css'
-import App from './App.jsx'
+/**
+ * =========================================================================
+ * main.jsx - React Application Entry Point
+ * =========================================================================
+ * Bootstrap file that renders the React application into the DOM.
+ */
 
-createRoot(document.getElementById('root')).render(
-  <StrictMode>
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import './styles/globals.css';
+import App from './App.jsx';
+
+// Mount React application
+const root = createRoot(document.getElementById('root'));
+
+root.render(
+  <React.StrictMode>
     <App />
-  </StrictMode>,
-)
+  </React.StrictMode>
+);

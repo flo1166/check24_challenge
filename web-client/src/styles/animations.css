@@ -1,0 +1,196 @@
+/**
+ * =========================================================================
+ * animations.css - Check24 Animation Library
+ * =========================================================================
+ * Keyframe animations and transition definitions.
+ */
+
+/* ========== FADE IN ========== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========== SLIDE IN ========== */
+
+@keyframes slideInFromLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* ========== SCALE ========== */
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ========== BOUNCE ========== */
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* ========== SHAKE ========== */
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-5px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(5px);
+  }
+}
+
+/* ========== SPIN ========== */
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ========== PULSE ========== */
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* ========== GLOW ========== */
+
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(5, 99, 193, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(5, 99, 193, 0.6);
+  }
+}
+
+/* ========== UTILITY ANIMATION CLASSES ========== */
+
+.c24-animate-fadeIn {
+  animation: fadeIn 300ms ease-in-out forwards;
+}
+
+.c24-animate-fadeInDown {
+  animation: fadeInDown 300ms ease-in-out forwards;
+}
+
+.c24-animate-fadeInUp {
+  animation: fadeInUp 300ms ease-in-out forwards;
+}
+
+.c24-animate-slideInFromLeft {
+  animation: slideInFromLeft 400ms ease-in-out forwards;
+}
+
+.c24-animate-slideInFromRight {
+  animation: slideInFromRight 400ms ease-in-out forwards;
+}
+
+.c24-animate-scaleIn {
+  animation: scaleIn 300ms ease-in-out forwards;
+}
+
+.c24-animate-bounce {
+  animation: bounce 600ms ease-in-out infinite;
+}
+
+.c24-animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+.c24-animate-pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* ========== TRANSITIONS ========== */
+
+.c24-transition-all {
+  transition: all var(--c24-transition-base);
+}
+
+.c24-transition-fast {
+  transition: all var(--c24-transition-fast);
+}
+
+.c24-transition-slow {
+  transition: all var(--c24-transition-slow);
+}
+
+.c24-transition-color {
+  transition: color var(--c24-transition-base),
+              background-color var(--c24-transition-base),
+              border-color var(--c24-transition-base);
+}
+
+.c24-transition-transform {
+  transition: transform var(--c24-transition-base);
+}
+
+.c24-transition-opacity {
+  transition: opacity var(--c24-transition-base);
+}

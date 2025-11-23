@@ -1,0 +1,232 @@
+/**
+ * =========================================================================
+ * typography.css - Check24 Typography System
+ * =========================================================================
+ * Font definitions, sizes, weights, and line heights.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Verdana:wght@400;700&display=swap');
+
+/* ========== FONT FAMILIES ========== */
+
+:root {
+  --c24-font-primary: 'Verdana', 'Arial', 'Helvetica', sans-serif;
+  --c24-font-mono: 'Courier New', 'Courier', monospace;
+}
+
+/* ========== FONT SIZES ========== */
+
+:root {
+  --c24-text-xs: 10px;
+  --c24-text-sm: 12px;
+  --c24-text-base: 14px;
+  --c24-text-lg: 16px;
+  --c24-text-xl: 18px;
+  --c24-text-2xl: 20px;
+  --c24-text-3xl: 24px;
+  --c24-text-4xl: 28px;
+  --c24-text-5xl: 32px;
+}
+
+/* ========== LINE HEIGHTS ========== */
+
+:root {
+  --c24-leading-none: 1;
+  --c24-leading-tight: 1.25;
+  --c24-leading-normal: 1.5;
+  --c24-leading-relaxed: 1.75;
+  --c24-leading-loose: 2;
+}
+
+/* ========== FONT WEIGHTS ========== */
+
+:root {
+  --c24-font-normal: 400;
+  --c24-font-bold: 700;
+}
+
+/* ========== TEXT STYLES ========== */
+
+body {
+  font-family: var(--c24-font-primary);
+  font-size: var(--c24-text-sm);
+  line-height: var(--c24-leading-normal);
+  font-weight: var(--c24-font-normal);
+  color: var(--c24-text-dark);
+}
+
+/* ========== HEADING STYLES ========== */
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--c24-font-primary);
+  font-weight: var(--c24-font-bold);
+  line-height: var(--c24-leading-tight);
+  color: var(--c24-text-dark);
+}
+
+h1 {
+  font-size: var(--c24-text-5xl);
+  margin-bottom: var(--c24-spacing-lg);
+}
+
+h2 {
+  font-size: var(--c24-text-4xl);
+  margin-bottom: var(--c24-spacing-md);
+}
+
+h3 {
+  font-size: var(--c24-text-3xl);
+  margin-bottom: var(--c24-spacing-md);
+}
+
+h4 {
+  font-size: var(--c24-text-2xl);
+  margin-bottom: var(--c24-spacing-sm);
+}
+
+h5 {
+  font-size: var(--c24-text-lg);
+  margin-bottom: var(--c24-spacing-sm);
+}
+
+h6 {
+  font-size: var(--c24-text-base);
+  margin-bottom: var(--c24-spacing-sm);
+}
+
+/* ========== PARAGRAPH STYLES ========== */
+
+p {
+  font-size: var(--c24-text-base);
+  line-height: var(--c24-leading-relaxed);
+  margin-bottom: var(--c24-spacing-md);
+}
+
+small {
+  font-size: var(--c24-text-xs);
+}
+
+strong {
+  font-weight: var(--c24-font-bold);
+}
+
+em {
+  font-style: italic;
+}
+
+/* ========== LIST STYLES ========== */
+
+ul, ol {
+  margin-left: var(--c24-spacing-lg);
+  margin-bottom: var(--c24-spacing-md);
+}
+
+li {
+  margin-bottom: var(--c24-spacing-sm);
+}
+
+/* ========== CODE STYLES ========== */
+
+code {
+  font-family: var(--c24-font-mono);
+  font-size: 0.9em;
+  background: var(--c24-light-gray);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--c24-text-dark);
+}
+
+pre {
+  background: var(--c24-light-gray);
+  padding: var(--c24-spacing-md);
+  border-radius: var(--c24-radius-md);
+  overflow-x: auto;
+  margin-bottom: var(--c24-spacing-md);
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  color: var(--c24-text-dark);
+}
+
+/* ========== BLOCKQUOTE STYLES ========== */
+
+blockquote {
+  border-left: 4px solid var(--c24-primary-medium);
+  padding-left: var(--c24-spacing-md);
+  margin: var(--c24-spacing-lg) 0;
+  color: var(--c24-text-muted);
+  font-style: italic;
+}
+
+/* ========== LINK STYLES ========== */
+
+a {
+  color: var(--c24-primary-medium);
+  text-decoration: none;
+  transition: color var(--c24-transition-fast);
+}
+
+a:hover {
+  color: var(--c24-hover-blue);
+  text-decoration: underline;
+}
+
+a:focus {
+  outline: 2px solid var(--c24-highlight-yellow);
+  outline-offset: 2px;
+}
+
+/* ========== TEXT UTILITIES ========== */
+
+.c24-text-xs { font-size: var(--c24-text-xs); }
+.c24-text-sm { font-size: var(--c24-text-sm); }
+.c24-text-base { font-size: var(--c24-text-base); }
+.c24-text-lg { font-size: var(--c24-text-lg); }
+.c24-text-xl { font-size: var(--c24-text-xl); }
+.c24-text-2xl { font-size: var(--c24-text-2xl); }
+.c24-text-3xl { font-size: var(--c24-text-3xl); }
+.c24-text-4xl { font-size: var(--c24-text-4xl); }
+.c24-text-5xl { font-size: var(--c24-text-5xl); }
+
+.c24-font-normal { font-weight: var(--c24-font-normal); }
+.c24-font-bold { font-weight: var(--c24-font-bold); }
+
+.c24-leading-none { line-height: var(--c24-leading-none); }
+.c24-leading-tight { line-height: var(--c24-leading-tight); }
+.c24-leading-normal { line-height: var(--c24-leading-normal); }
+.c24-leading-relaxed { line-height: var(--c24-leading-relaxed); }
+.c24-leading-loose { line-height: var(--c24-leading-loose); }
+
+/* ========== TEXT ALIGNMENT ========== */
+
+.c24-text-left { text-align: left; }
+.c24-text-center { text-align: center; }
+.c24-text-right { text-align: right; }
+.c24-text-justify { text-align: justify; }
+
+/* ========== TEXT TRANSFORM ========== */
+
+.c24-uppercase { text-transform: uppercase; }
+.c24-lowercase { text-transform: lowercase; }
+.c24-capitalize { text-transform: capitalize; }
+.c24-normal-case { text-transform: none; }
+
+/* ========== RESPONSIVE TYPOGRAPHY ========== */
+
+@media (max-width: 768px) {
+  h1 { font-size: var(--c24-text-4xl); }
+  h2 { font-size: var(--c24-text-3xl); }
+  h3 { font-size: var(--c24-text-2xl); }
+  
+  body {
+    font-size: var(--c24-text-xs);
+  }
+}
+
+@media (max-width: 480px) {
+  h1 { font-size: var(--c24-text-3xl); }
+  h2 { font-size: var(--c24-text-2xl); }
+  h3 { font-size: var(--c24-text-lg); }
+}
