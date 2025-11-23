@@ -3,6 +3,7 @@ import './styles/App.css'
 import WidgetRenderer from './components/WidgetRenderer'
 
 // Remove this - mock server data
+// TODO: Replace with actual API call in a real application
 const mockServerData = [
   {
     widget_id: 'w-card-001',
