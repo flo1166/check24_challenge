@@ -1,41 +1,79 @@
-from fastapi import APIRouter, BackgroundTasks, Depends
-from core.models import Widget # The Pydantic model for a single widget
-from core.cache import get_with_swr
-from core.clients import ProductServiceClient # The Pybreaker-wrapped client
+import json
+import logging
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
+from app.core.cache import get_with_swr 
+from app.core.clients import get_product_page_data 
+from app.core.models import WidgetResponse 
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 router = APIRouter()
 
-# Dependency function to get the client instance (e.g., using FastAPIs DI)
-def get_product_client() -> ProductServiceClient:
-    # In a real app, use environment variables for the URL
-    return ProductServiceClient(base_url="http://mock-product-service:8001")
+HOME_PAGE_CACHE_KEY = "sdui:home_page:v1"
 
-@router.get("/home", response_model=list[Widget])
-async def home_endpoint(
-    background_tasks: BackgroundTasks,
-    product_client: ProductServiceClient = Depends(get_product_client)
-):
+async def fetch_data_and_serialize():
     """
-    The main orchestration endpoint.
-    1. Fetches data for multiple widgets concurrently using SWR.
-    2. Assembles the final list of SDUI models.
+    This is the async fetch_function passed to get_with_swr. 
+    It fetches data, validates it via Pydantic, and returns a dict ready for JSON serialization.
     """
+    logger.info("fetch_data_and_serialize: Starting fetch from upstream service...")
+    try:
+        # 1. Fetch raw data from the upstream service (Circuit Breaker protected)
+        raw_data = await get_product_page_data()
+        logger.info(f"fetch_data_and_serialize: Raw data received: {raw_data}")
+        
+        # 2. Validate using the Pydantic model
+        validated_model = WidgetResponse(**raw_data)
+        logger.info("fetch_data_and_serialize: Data validated successfully")
+        
+        # 3. Return a dictionary that can be JSON dumped/stored in Redis
+        result = validated_model.model_dump()
+        logger.info(f"fetch_data_and_serialize: Returning serialized data")
+        return result
+    except Exception as e:
+        logger.error(f"fetch_data_and_serialize: Error - {type(e).__name__}: {e}", exc_info=True)
+        raise
+
+@router.get(
+    "/home", 
+    response_model=WidgetResponse,
+    summary="Fetch the Server-Driven UI payload for the Home page with SWR caching."
+)
+async def get_home_page_data(background_tasks: BackgroundTasks):
+    """
+    The main API endpoint that orchestrates the data retrieval using SWR logic.
+    """
+    logger.info("get_home_page_data: Endpoint called")
     
-    # 1. Define the orchestration tasks
-    # The lambda acts as the fetch_function for SWR, using the Pybreaker client
-    car_insurance_widget = await get_with_swr(
-        key="widget:car-insurance",
-        fetch_function=lambda: product_client.get_car_insurance_widget_model(),
-        background_tasks=background_tasks
-    )
+    try:
+        logger.info("get_home_page_data: Calling get_with_swr...")
+        
+        # Use the centralized SWR cache function to retrieve data
+        data = await get_with_swr(
+            key=HOME_PAGE_CACHE_KEY,
+            fetch_function=fetch_data_and_serialize,
+            background_tasks=background_tasks
+        )
+        
+        logger.info(f"get_home_page_data: Data retrieved from cache/upstream: {data}")
+        
+        # If data is successfully returned (either fresh or stale), 
+        # return the validated model instance.
+        result = WidgetResponse(**data)
+        logger.info("get_home_page_data: Returning WidgetResponse")
+        return result
+        
+    except Exception as e:
+        logger.error(f"get_home_page_data: Exception caught - {type(e).__name__}: {e}", exc_info=True)
+        
+        # Return a standard 503 error for upstream failures to the client
+        raise HTTPException(
+            status_code=503, 
+            detail=f"Service temporarily unavailable: {str(e)}"
+        )
 
-    # TODO You would typically add more widget fetching calls here for other services...
-
-    # 2. Assemble the final list, filtering out fallbacks (None)
-    all_widgets = [car_insurance_widget] # Add other fetched widgets here
-    
-    # 3. Filter out any None values (which represent a Circuit Breaker open or service failure fallback)
-    final_response = [w for w in all_widgets if w is not None]
-
-    # Note: Pydantic will automatically validate and serialize the list before returning
-    return final_response
+@router.get("/health")
+async def health():
+    logger.info("health: Health check called")
+    return {"status": "healthy"}

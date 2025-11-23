@@ -31,12 +31,16 @@ ENV PATH=/root/.local/bin:$PATH \
 # Copy application code
 COPY ./app /app/app
 
-# Health check
-HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
-    CMD curl -f http://localhost:80/health || exit 1
+# Set working directory
+WORKDIR /app
+
+HEALTHCHECK --interval=5s --timeout=3s --retries=5 \
+    CMD curl -f http://localhost/ || exit 1
 
 # Expose port
 EXPOSE 80
 
 # Run the application
+WORKDIR /app
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
