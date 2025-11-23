@@ -1,5 +1,0 @@
-pybreaker
-httpx
-uvicorn
-fastapi
-redis

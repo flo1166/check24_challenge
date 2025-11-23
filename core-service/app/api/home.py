@@ -1,5 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends
-from core.models import models # The Pydantic model for a single widget
+from core.models import Widget # The Pydantic model for a single widget
 from core.cache import get_with_swr
 from core.clients import ProductServiceClient # The Pybreaker-wrapped client
 
@@ -10,7 +10,7 @@ def get_product_client() -> ProductServiceClient:
     # In a real app, use environment variables for the URL
     return ProductServiceClient(base_url="http://mock-product-service:8001")
 
-@router.get("/home", response_model=list[models])
+@router.get("/home", response_model=list[Widget])
 async def home_endpoint(
     background_tasks: BackgroundTasks,
     product_client: ProductServiceClient = Depends(get_product_client)

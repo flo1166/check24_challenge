@@ -1,0 +1,52 @@
+services:
+  # 1. Mock Product Service
+  mock-product-service:
+    build: 
+      context: ./mock-product-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:80"
+    restart: always
+
+  # 2. Core Service (BFF)
+  core-service:
+    build: 
+      context: ./core-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:80"
+    environment:
+      MOCK_PRODUCT_SERVICE_URL: http://mock-product-service:80/
+      REDIS_HOST: redis
+      KAFKA_HOST: kafka:9092
+    depends_on:
+      - mock-product-service
+      - redis
+
+  # 3. Redis
+  redis:
+    image: redis:7.2-alpine
+    restart: always
+    ports: 
+      - "6379:6379"
+
+  # 4. Kafka (optional - can be added later)
+  # kafka:
+  #   image: confluentinc/cp-kafka:7.5.0
+  #   restart: always
+  #   environment:
+  #     KAFKA_NODE_ID: 1
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+  #     KAFKA_PROCESS_ROLES: broker,controller
+  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  #     KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+  #     KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+  #     KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+  #     KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  #     KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+  #     CLUSTER_ID: MkQkRjczNTAxNDMyNDk5OQ==
+  #   ports:
+  #     - "9092:9092"
+
+ # //TODO: kafka
