@@ -1,38 +1,36 @@
-// web-client/src/components/WidgetRenderer.jsx
 import React from 'react';
-import Card from './widgets/Card'; // Import your component place-holders
-
-// Map the server's 'component_type' string to the actual React component.
-const componentMap = {
-  // Key must match the 'component_type' string in the Widget Pydantic model
-  'Card': Card, 
-  // 'Hero': HeroComponent, // Add more components as you define them
-  // 'TextList': TextListComponent,
-};
+import Card from "./widgets/Card";
 
 /**
- * The core of Server-Driven UI. Renders the appropriate component 
- * based on the widget's component_type.
- * @param {object} props.widget - The Widget JSON object from the server.
+ * WidgetRenderer: Maps component_type to React components
+ * Renders the correct component based on SDUI widget definition
  */
-const WidgetRenderer = ({ widget }) => {
-  const { component_type, data } = widget;
+export default function WidgetRenderer({ widget }) {
+  console.log("WidgetRenderer received widget:", widget);
 
-  // 1. Look up the component in the map based on the type string
-  const SpecificComponent = componentMap[component_type];
-
-  // 2. Handle unknown/missing components gracefully
-  if (!SpecificComponent) {
-    console.error(`Unknown component type: ${component_type}`);
-    return (
-      <div style={{ padding: '10px', border: '1px solid red', margin: '10px' }}>
-          ⚠️ Error: Unknown Widget Type {component_type}
-        </div>
-    );
+  if (!widget) {
+    console.warn("WidgetRenderer: widget is undefined");
+    return <div className="text-gray-500">Invalid widget</div>;
   }
 
-  // 3. Render the specific component, passing the whole 'data' object
-  return <SpecificComponent data={data} />;
-};
+  const { component_type, data, ...props } = widget;
 
-export default WidgetRenderer;
+  // Map component types to React components
+  const componentMap = {
+    Card: Card,
+    // Add other component types here as needed
+    // Button: Button,
+    // Hero: Hero,
+    // etc.
+  };
+
+  // Get the component class, default to Card if not found
+  const Component = componentMap[component_type] || Card;
+
+  // Pass the entire widget object to the component
+  return (
+    <div className="widget-wrapper">
+      <Component data={data || widget} {...props} />
+    </div>
+  );
+}

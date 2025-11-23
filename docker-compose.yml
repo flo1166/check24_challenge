@@ -8,6 +8,13 @@ services:
     ports:
       - "8001:80"
     restart: always
+    environment: # <--- ADD ENVIRONMENT VARS
+      DB_HOST: product-db
+      DB_USER: product_user
+      DB_PASSWORD: product_password
+      DB_NAME: product_data
+    depends_on: # <--- ADD DEPENDENCY
+      - product-db
 
   # 2. Core Service (BFF)
   core-service:
@@ -21,11 +28,16 @@ services:
       MOCK_PRODUCT_SERVICE_URL: http://mock-product-service:80/
       REDIS_HOST: redis
       KAFKA_HOST: kafka:9093
+      DB_HOST: core-db # <--- UPDATED HOST
+      DB_USER: core_user
+      DB_PASSWORD: core_password
+      DB_NAME: widget_platform_db
     volumes:
       - ./core-service/app:/app/app
     depends_on:
       - mock-product-service
       - redis
+      - core-db
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s
@@ -73,6 +85,44 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     depends_on:
       - zookeeper
+  # 4. Product Service Database (DB for mock-product-service)
+  product-db:
+      image: postgres:16-alpine 
+      container_name: product-db
+      restart: always
+      ports:
+        - "5433:5432"
+      environment:
+        POSTGRES_USER: product_user
+        POSTGRES_PASSWORD: product_password
+        POSTGRES_DB: product_data
+      volumes:
+        - product_db_data:/var/lib/postgresql/data
+        - ./mock-product-service/db_init:/docker-entrypoint-initdb.d
+
+  # 5. Core Service Database (DB for core-service)
+  core-db:
+    image: postgres:16-alpine 
+    container_name: core-db
+    restart: always
+    ports:
+      - "5432:5432" # Mapped to 5432 on the host
+    environment:
+      POSTGRES_USER: core_user
+      POSTGRES_PASSWORD: core_password
+      POSTGRES_DB: widget_platform_db
+    volumes:
+      - core_db_data:/var/lib/postgresql/data
+      
+  # 6. Database Visualizer (Adminer)
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    restart: always
+    ports:
+      - "8080:8080" # Access Adminer via http://localhost:8080
 
 volumes:
   redis_data:
+  product_db_data: # <--- New volume for product-db
+  core_db_data:    # <--- New volume for core-db

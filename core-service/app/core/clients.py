@@ -2,11 +2,41 @@ import httpx
 from pybreaker import CircuitBreaker, CircuitBreakerError
 from typing import Dict, Any
 import os
+import logging
+
+logger = logging.getLogger(__name__)
+
+FALLBACK_WIDGET_PAYLOAD: Dict[str, Any] = {
+    "title": "Welcome to CHECK24",
+    "widgets": [
+        {
+            "component_type": "Card",
+            "data": {
+                "header": "Service Temporarily Unavailable",
+                "body": "We apologize for the inconvenience. Please try again in a few moments."
+            }
+        }
+    ]
+}
+
+FAILURE_THRESHOLD = 5
+RESET_TIMEOUT = 10
 
 # 1. Configure the Circuit Breaker (Global)
 # After 5 consecutive failures, the circuit will open.
 # It will attempt to close again after 30 seconds (half-open state).
-product_service_breaker = CircuitBreaker(fail_max=5, reset_timeout=30)
+product_service_breaker = CircuitBreaker(fail_max=FAILURE_THRESHOLD, reset_timeout=RESET_TIMEOUT)
+
+def get_fallback_widget(e: CircuitBreakerError):
+    logger.warning(f"Circuit Breaker is OPEN. Returning graceful fallback. Error: {e}")
+    # Define your Graceful Fallback widget structure here.
+    # This structure must match the SDUI Pydantic Widget Model in core/models.py
+    return {
+        "component_type": "GracefulFallbackCard",
+        "title": "We're sorry!",
+        "message": "We're currently experiencing a high load. Please try again in a moment.",
+        "icon": "warning"
+    }
 
 class ProductServiceClient:
     """
@@ -23,29 +53,35 @@ class ProductServiceClient:
         Fetches data from the mock service asynchronously. Protected by the breaker.
         Calls the correct endpoint with a user_id parameter.
         """
-        # FIXED: Use the correct endpoint path with user_id
-        response = await self.client.get("/widgets/car-insurance/1")
+        logger.info("ProductServiceClient: Fetching car insurance data...")
+        response = await self.client.get("/widget/car-insurance")
         response.raise_for_status()  # Raises an exception on 4xx/5xx status
+        logger.info("ProductServiceClient: Data fetched successfully")
         return response.json()
 
-    async def get_car_insurance_widget_model(self) -> Dict[str, Any] | None:
+    async def get_car_insurance_widget_model(self) -> Dict[str, Any]:
         """
         Handles the fetch and provides resilience/fallback logic.
+        Returns fallback data if the circuit breaker is open or service fails.
         """
         try:
             data = await self.fetch_car_insurance_data()
-            print("ProductServiceClient: Data fetched successfully.")
-            # Logic to map raw data to your SDUI Pydantic model (Simplified for now)
-            # This data will be used by home.py's fetch_data_and_serialize function
+            logger.info("ProductServiceClient: Data fetch succeeded")
             return data 
-        except (CircuitBreakerError, httpx.HTTPError) as e:
-            # Handle failure: Circuit is open or HTTP error occurred.
-            print(f"ProductServiceClient: Service call failed/breaker open: {type(e).__name__}: {e}")
-            raise  # Re-raise the error to be caught by the SWR logic in home.py
+        except CircuitBreakerError as e:
+            logger.error(f"ProductServiceClient: Circuit Breaker OPEN: {e}")
+            return FALLBACK_WIDGET_PAYLOAD
+        except httpx.HTTPError as e:
+            logger.error(f"ProductServiceClient: HTTP error - {type(e).__name__}: {e}")
+            return FALLBACK_WIDGET_PAYLOAD
+        except Exception as e:
+            logger.error(f"ProductServiceClient: Unexpected error - {type(e).__name__}: {e}")
+            return FALLBACK_WIDGET_PAYLOAD
             
     async def close(self):
         """Closes the underlying HTTP client connection."""
         await self.client.aclose()
+        logger.info("ProductServiceClient: HTTP client closed")
 
 
 # Global client instance (Use service name from docker-compose)
@@ -54,6 +90,7 @@ MOCK_PRODUCT_SERVICE_BASE_URL = os.getenv(
     "http://mock-product-service:80/"
 )
 product_service_client = ProductServiceClient(base_url=MOCK_PRODUCT_SERVICE_BASE_URL)
+logger.info(f"Initializing ProductServiceClient with URL: {MOCK_PRODUCT_SERVICE_BASE_URL}")
 
 # Public function for home.py to use (matches the old pattern, but is now just a wrapper)
 async def get_product_page_data():
