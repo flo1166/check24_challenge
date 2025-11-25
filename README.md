@@ -21,3 +21,15 @@ Database	product_data
 cd web-client
 npm i
 npm run dev  
+
+# start server core-service
+cd core-service
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug --reload
+
+# check if redis cache has data:
+docker run -it --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6379
+SCAN 0 MATCH *:is_refreshing
+GET "sdui:home_page:v1"
+
+# check if server failed with data load from api
+docker-compose logs --tail 100 core-service

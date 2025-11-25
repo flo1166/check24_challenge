@@ -7,6 +7,7 @@ import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+logging.getLogger("aiokafka").setLevel(logging.INFO)
 
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9093")
 KAFKA_TOPIC = "user.car.insurance.purchased"

@@ -1,9 +1,11 @@
 import logging
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from starlette import status
+import asyncio
+from typing import List
+from fastapi import APIRouter, status, HTTPException, BackgroundTasks
+
 from app.core.cache import get_with_swr
-from app.core.clients import get_product_page_data
-from app.core.models import WidgetResponse
+from app.core.clients import fetch_car_insurance_widget_swr
+from app.core.models import Widget, WidgetResponse
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
@@ -13,54 +15,99 @@ router = APIRouter()
 HOME_PAGE_CACHE_KEY = "sdui:home_page:v1"
 
 
-async def fetch_data_and_serialize():
+async def fetch_and_serialize_widgets():
     """
-    This is the async fetch_function passed to get_with_swr.
-    It fetches data, validates it via Pydantic, and returns a dict ready for JSON serialization.
+    Fetch car insurance widgets and serialize them to the expected format.
     """
-    logger.info("fetch_data_and_serialize: Starting fetch from upstream service...")
+    logger.info("fetch_and_serialize_widgets: Fetching car insurance widgets...")
+    
     try:
-        # 1. Fetch raw data from the upstream service (Circuit Breaker protected)
-        raw_data = await get_product_page_data()
-        logger.info(f"fetch_data_and_serialize: Raw data received: {raw_data}")
+        # Fetch the widget data from the product service
+        result = await fetch_car_insurance_widget_swr()
         
-        # 2. Validate using the Pydantic model
-        validated_model = WidgetResponse(**raw_data)
-        logger.info("fetch_data_and_serialize: Data validated successfully")
+        logger.debug(f"fetch_and_serialize_widgets: Raw result type: {type(result)}")
+        logger.debug(f"fetch_and_serialize_widgets: Raw result: {result}")
         
-        # 3. Return a dictionary that can be JSON dumped/stored in Redis
-        result = validated_model.model_dump()
-        logger.info(f"fetch_data_and_serialize: Returning serialized data")
-        return result
+        # Handle different response formats
+        if isinstance(result, dict):
+            # If result is a dict with 'widgets' key, extract it
+            if "widgets" in result:
+                widgets_data = result["widgets"]
+                logger.info(f"fetch_and_serialize_widgets: Extracted {len(widgets_data)} widgets from response")
+                return widgets_data
+            else:
+                # If it's already a widget dict, wrap it in a list
+                logger.info("fetch_and_serialize_widgets: Single widget dict, wrapping in list")
+                return [result]
+        
+        elif isinstance(result, list):
+            # Already a list, return as-is
+            logger.info(f"fetch_and_serialize_widgets: Received list of {len(result)} widgets")
+            return result
+        
+        else:
+            logger.error(f"fetch_and_serialize_widgets: Unexpected result type {type(result)}")
+            return []
+    
     except Exception as e:
-        logger.error(f"fetch_data_and_serialize: Error - {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"fetch_and_serialize_widgets: Error fetching widgets - {type(e).__name__}: {e}", exc_info=True)
         raise
 
 
 @router.get("/home", response_model=WidgetResponse)
-async def get_home_page_widgets():
+async def get_home_page_widgets(background_tasks: BackgroundTasks):
     """
-    Aggregates data for the home page from dependent services.
-    Simplified version without SWR caching for now - focuses on data flow.
+    Aggregates data for the home page from multiple independent widget services.
+    Applies SWR logic to the Car Insurance widget for resilience and speed.
     """
+    logger.info("get_home_page_widgets: Starting widget aggregation.")
+
     try:
-        logger.info("get_home_page_widgets: Called")
+        # Fetch widgets using SWR cache
+        logger.info("get_home_page_widgets: Calling get_with_swr...")
+        widgets_data = await get_with_swr(
+            key=HOME_PAGE_CACHE_KEY,
+            fetch_function=fetch_and_serialize_widgets,
+            background_tasks=background_tasks
+        )
         
-        # 1. Fetch raw data from the upstream service (Circuit Breaker protected)
-        raw_data = await get_product_page_data()
-        logger.info(f"get_home_page_widgets: Raw data received")
+        logger.debug(f"get_home_page_widgets: Received from cache/fetch: {type(widgets_data)} with {len(widgets_data) if isinstance(widgets_data, list) else 'unknown'} items")
         
-        # 2. Validate and return
-        widget_data = WidgetResponse(**raw_data)
-        logger.info("get_home_page_widgets: Data validated and returned successfully")
-        return widget_data
+        # Ensure we have a list
+        if not isinstance(widgets_data, list):
+            logger.warning(f"get_home_page_widgets: widgets_data is not a list, converting...")
+            widgets_data = [widgets_data] if widgets_data else []
         
+        if not widgets_data:
+            logger.warning("get_home_page_widgets: No widgets returned")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No widgets available from services"
+            )
+        
+        # Create response
+        widget_response = WidgetResponse(widgets=widgets_data)
+        logger.info(f"get_home_page_widgets: Aggregation finished. {len(widgets_data)} widgets returned.")
+        
+        return widget_response
+    
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    
     except Exception as e:
-        logger.error(f"get_home_page_widgets: Error - {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"get_home_page_widgets: Exception - {type(e).__name__}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Service temporarily unavailable: {str(e)}"
+            detail=f"Service error: {str(e)}"
         )
+
+
+@router.get("/health")
+async def health():
+    logger.info("health: Health check called")
+    return {"status": "healthy"}
+
 '''    
 @router.get(
     "/home", 

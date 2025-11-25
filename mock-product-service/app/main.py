@@ -78,7 +78,7 @@ def get_car_insurance_widget(db: Session = Depends(get_db)):
     Fetches all car insurance widgets from the database using SQLAlchemy ORM.
     """
     # 1. Simulate a failure rate (Circuit Breaker test)
-    if random.random() < 0.05:
+    if random.random() < 0.8:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Simulated upstream service failure"
