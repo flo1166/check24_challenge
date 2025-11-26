@@ -4,6 +4,7 @@ from typing import Dict, Any
 import os
 import logging
 import time
+import asyncio
 
 CAR_INSURANCE_CACHE: Dict[str, Any] = {}
 FRESH_PERIOD_SECONDS = 5

@@ -25,6 +25,7 @@ engine = create_engine(
     SQLALCHEMY_DATABASE_URL, 
     pool_pre_ping=True
 )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -66,6 +67,11 @@ def get_db():
 
 app = FastAPI()
 
+@app.get("/")
+def read_root():
+    """Returns a simple message confirming the service is running."""
+    return {"message": "Mock Product Service is running. Try /health or /widget/car-insurance"}
+
 # Health Check 
 @app.get("/health")
 def health_check():
@@ -78,7 +84,7 @@ def get_car_insurance_widget(db: Session = Depends(get_db)):
     Fetches all car insurance widgets from the database using SQLAlchemy ORM.
     """
     # 1. Simulate a failure rate (Circuit Breaker test)
-    if random.random() < 0.8:
+    if random.random() < 0.2:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Simulated upstream service failure"

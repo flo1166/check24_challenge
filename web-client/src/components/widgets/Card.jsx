@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 import { Heart, ShoppingCart } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { getImageUrl } from '../../utils/imageLoader';
 
 export default function Card({ data }) {
   const { updateNotification } = useNotifications();
@@ -21,6 +22,7 @@ export default function Card({ data }) {
   const content = data?.content || 'No description available';
   const imageUrl = data?.image_url || '';
   const ctaLink = data?.cta_link || '#';
+  const resolvedImageUrl = getImageUrl(data?.image_url || null);
 
   /**
    * Handle adding item to cart
@@ -42,14 +44,14 @@ export default function Card({ data }) {
   };
 
   return (
-    <div className="bg-white rounded-c24-md shadow-c24-md hover:shadow-c24-lg transition-all duration-200 overflow-hidden border border-c24-border-gray hover:border-c24-primary-medium hover:-translate-y-0.5">
-      {/* Image Container */}
-      <div className="relative h-56 overflow-hidden bg-c24-light-gray group">
-        {imageUrl ? (
+    <div className="bg-white rounded-c24-md shadow-c24-md hover:shadow-c24-lg transition-all duration-200 overflow-hidden border border-c24-border-gray hover:border-c24-primary-medium hover:-translate-y-0.5 h-full flex flex-col">
+      {/* Image Container: Added flex justify-center items-center for dual centering */}
+      <div className="relative h-40 overflow-hidden bg-c24-light-gray group flex-shrink-0 flex justify-center items-center">
+        {resolvedImageUrl ? (
           <img
-            src={imageUrl}
+            src={resolvedImageUrl}
             alt={title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+            className="w-65 object-cover group-hover:scale-105 transition-transform duration-200"
             onError={(e) => {
               e.target.src =
                 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22240%22%3E%3Crect fill=%22%23f5f5f5%22 width=%22400%22 height=%22240%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-family=%22Arial%22 font-size=%2216%22 fill=%22%23999%22%3ENo image available%3C/text%3E%3C/svg%3E';
@@ -79,16 +81,20 @@ export default function Card({ data }) {
 
       {/* Content */}
       <div className="p-4 flex flex-col flex-1">
-        {/* Title */}
-        <h3 className="text-base font-bold text-c24-text-dark mb-2 line-clamp-2">{title}</h3>
+        {/* New wrapper for Title/Subtitle/Description, consumes vertical space */}
+        <div className="flex flex-col flex-1 mb-4">
+          {/* Title */}
+          <h3 className="text-base font-bold text-c24-text-dark mb-2 line-clamp-2">{title}</h3>
 
-        {/* Subtitle */}
-        {subtitle && <p className="text-xs font-semibold text-c24-primary-medium mb-2">{subtitle}</p>}
+          {/* Subtitle */}
+          {subtitle && <p className="text-xs font-semibold text-c24-primary-medium mb-2">{subtitle}</p>}
 
-        {/* Description */}
-        <p className="text-c24-sm text-c24-text-muted mb-4 line-clamp-3 leading-relaxed flex-1">{content}</p>
+          {/* Description */}
+          {/* Removed mb-4 here and added it to the parent wrapper instead */}
+          <p className="text-c24-sm text-c24-text-muted line-clamp-3 leading-relaxed">{content}</p>
+        </div>
 
-        {/* Footer with Button */}
+        {/* Footer with Button is now anchored to the bottom using mt-auto */}
         <div className="mt-auto">
           <button
             onClick={handleAddToCart}

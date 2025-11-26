@@ -1,30 +1,45 @@
-/**
- * =========================================================================
- * HomePage.jsx - Main Home Page Component
- * =========================================================================
- */
-
-import React from 'react';
+import { useState, useRef, useEffect } from 'react';
 import WidgetRenderer from '../components/widgets/WidgetRenderer';
 import Loader from '../components/common/Loader';
 import { useNotifications } from '../contexts/NotificationContext';
-
-// ⬅️ Import CategoryNav
 import CategoryNav from "../components/navigation/CategoryNav";
 
 export default function HomePage({ data, loading, error, onRetry }) {
   const { updateNotification } = useNotifications();
-  
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [carouselHeight, setCarouselHeight] = useState('auto');
+  const carouselRef = useRef(null);
 
-  // ⬅️ FIX: Needed for CategoryNav
-  const [activeCategory, setActiveCategory] = React.useState(null);
-
-  /**
-   * Optional: handle "Bought Konto" if still needed
-   */
   const handleBoughtKonto = () => {
     updateNotification('cart', 1);
   };
+
+  // Measure the tallest card and set carousel height
+  useEffect(() => {
+    if (!carouselRef.current) return;
+
+    const measureHeight = () => {
+      const slides = carouselRef.current?.querySelectorAll('[data-carousel-slide]');
+      if (slides && slides.length > 0) {
+        let maxHeight = 0;
+        slides.forEach((slide) => {
+          const height = slide.scrollHeight;
+          if (height > maxHeight) maxHeight = height;
+        });
+        setCarouselHeight(maxHeight > 0 ? `${maxHeight}px` : 'auto');
+      }
+    };
+
+    // Measure after render
+    measureHeight();
+
+    // Remeasure on window resize
+    const resizeObserver = new ResizeObserver(measureHeight);
+    resizeObserver.observe(carouselRef.current);
+
+    return () => resizeObserver.disconnect();
+  }, [data?.widgets]);
 
   // Loading State
   if (loading) {
@@ -68,44 +83,78 @@ export default function HomePage({ data, loading, error, onRetry }) {
         <p className="text-lg opacity-90 mb-8">
           Find the best insurance deals tailored to your needs
         </p>
-            {/*
-        Category Nav Integration
-
-        <CategoryNav
-            activeCategory={activeCategory}
-            onSelect={(id) => setActiveCategory(id)}
-            badges={{
-            versicherung: { count: 0, locked: false },
-            konto:        { count: 1, locked: true },
-            stromgas:     { count: 0, locked: false },
-            internet:     { count: 3, locked: true },
-            handy:        { count: 0, locked: false },
-            reise:        { count: 5, locked: false },
-            fluege:       { count: 0, locked: false },
-            hotels:       { count: 0, locked: true },
-            mietwagen:    { count: 1, locked: false },
-            }}
-        />
-        //TODO: if I want to have a insurance centre*/}
       </section>
-        
-      {/* Widgets Grid */}
-      <section className="mb-16">
-        <h2 className="text-3xl font-bold text-c24-text-dark mb-8">Featured Deals</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {data?.widgets && data.widgets.length > 0 ? (
-            data.widgets
-              .sort((a, b) => (a.priority || 0) - (b.priority || 0))
-              .map((widget, index) => (
-                <WidgetRenderer key={widget.widget_id || index} widget={widget} index={index} />
-              ))
-          ) : (
-            <div className="col-span-full text-center py-12">
-              <p className="text-c24-text-muted text-base">No deals available at the moment</p>
+      {/* Widgets Carousel */}
+      <section className="mb-16">
+        <h2 className="text-3xl font-bold text-c24-text-dark mb-8">Car Insurance Deals</h2>
+        
+        {data?.widgets && data.widgets.length > 0 ? (
+          <div className="relative">
+            <div className="w-full">
+              <div className="relative overflow-hidden" style={{ height: carouselHeight }} ref={carouselRef}>
+                <div 
+                  className="flex transition-transform duration-300 ease-out items-stretch"
+                  style={{ 
+                    transform: `translateX(calc(-${carouselIndex} * (100% / 3)))` 
+                  }}
+                >
+                  {data.widgets
+                    .sort((a, b) => (a.priority || 0) - (b.priority || 0))
+                    .map((widget, index) => (
+                      <div 
+                        key={widget.widget_id || index}
+                        data-carousel-slide
+                        className="w-full lg:w-1/3 flex-shrink-0 px-3"
+                      >
+                        <WidgetRenderer widget={widget} index={index} />
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Dot Indicators */}
+              <div className="flex justify-center gap-2 mt-6">
+                {data.widgets.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCarouselIndex(index)}
+                    className={`w-4 h-2 rounded-full transition-colors ${
+                      index === carouselIndex ? 'bg-c24-primary-light' : 'bg-c24-text-muted'
+                    }`}
+                    aria-label={`Go to slide ${index + 1}`}
+                  />
+                ))}
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* Left Navigation Button */}
+            <button
+              onClick={() => setCarouselIndex(Math.max(0, carouselIndex - 1))}
+              className="absolute left-[-30px] top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-c24-text-muted/10 transition-colors disabled:opacity-50 z-10"
+              disabled={carouselIndex === 0}
+              aria-label="Previous slide"
+            >
+              <svg className="w-6 h-6 text-c24-text-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+
+            {/* Right Navigation Button */}
+            <button
+              onClick={() => setCarouselIndex(Math.min(data.widgets.length - 1, carouselIndex + 1))}
+              className="absolute right-[-30px] top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-c24-text-muted/10 transition-colors disabled:opacity-50 z-10"
+              disabled={carouselIndex === data.widgets.length - 1}
+              aria-label="Next slide"
+            >
+              <svg className="w-6 h-6 text-c24-text-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <p className="text-c24-text-muted">No widgets available at the moment.</p>
+        )}
       </section>
 
       {/* Footer CTA */}

@@ -10,7 +10,7 @@
  * - Error boundaries
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import MainLayout from './components/layout/MainLayout';
 import HomePage from './pages/HomePage';
 import { NotificationContext } from './contexts/NotificationContext';

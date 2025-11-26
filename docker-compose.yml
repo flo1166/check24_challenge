@@ -106,7 +106,7 @@ services:
     container_name: core-db
     restart: always
     ports:
-      - "5432:5432" # Mapped to 5432 on the host
+      - "5434:5432" # Mapped to 5432 on the host
     environment:
       POSTGRES_USER: core_user
       POSTGRES_PASSWORD: core_password
@@ -120,7 +120,10 @@ services:
     container_name: adminer
     restart: always
     ports:
-      - "8080:8080" # Access Adminer via http://localhost:8080
+      - "8081:8080" # Access Adminer via http://localhost:8080
+    depends_on: 
+      - product-db
+      - core-db
 
 volumes:
   redis_data:

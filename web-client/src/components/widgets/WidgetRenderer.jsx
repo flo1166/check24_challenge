@@ -39,7 +39,7 @@ export default function WidgetRenderer({ widget, index }) {
       `⚠️ WidgetRenderer: Unknown component type "${component_type}". Defaulting to Card.`
     );
     return (
-      <div key={widget_id || index} data-component-type={component_type} data-priority={priority}>
+      <div key={widget_id || index} data-component-type={component_type} data-priority={priority} className="h-full">
         <Card data={data || widget} />
       </div>
     );
@@ -50,6 +50,8 @@ export default function WidgetRenderer({ widget, index }) {
       key={widget_id || index}
       data-component-type={component_type}
       data-priority={priority}
+      // This h-full correctly ensures the widget occupies 100% of the parent slide wrapper height.
+      className="h-full" 
     >
       <Suspense fallback={<Loader />}>
         <Component data={data || widget} />

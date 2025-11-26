@@ -75,7 +75,7 @@ async def get_with_swr(key: str, fetch_function: Callable[[], Any], background_t
         refresh_flag_key = key + REFRESH_FLAG_SUFFIX
         is_refreshing = await redis_client.exists(refresh_flag_key)
         
-        swr_grace_seconds = SWR_GRACE_PERIOD.total_seconds()
+        swr_grace_seconds = int(SWR_GRACE_PERIOD.total_seconds())
         
         if ttl_remaining > 0 and ttl_remaining <= swr_grace_seconds and not is_refreshing:
             await redis_client.expire(key, swr_grace_seconds)

@@ -5,10 +5,9 @@
  * Manages badge counts across the application.
  * Provides methods to increment/decrement notification badges.
  */
+import { createContext, useContext } from 'react';
 
-import React from 'react';
-
-export const NotificationContext = React.createContext({
+export const NotificationContext = createContext({
   notifications: {
     cart: 0,
     favorites: 0,
@@ -21,7 +20,7 @@ export const NotificationContext = React.createContext({
 });
 
 export function useNotifications() {
-  const context = React.useContext(NotificationContext);
+  const context = useContext(NotificationContext);
   if (!context) {
     throw new Error('useNotifications must be used within NotificationContext.Provider');
   }

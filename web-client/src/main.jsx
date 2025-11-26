@@ -5,7 +5,7 @@
  * Bootstrap file that renders the React application into the DOM.
  */
 
-import React from 'react';
+import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/globals.css';
 import App from './App.jsx';
@@ -14,7 +14,7 @@ import App from './App.jsx';
 const root = createRoot(document.getElementById('root'));
 
 root.render(
-  <React.StrictMode>
+  <StrictMode>
     <App />
-  </React.StrictMode>
+  </StrictMode>
 );
