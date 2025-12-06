@@ -1,3 +1,10 @@
+# ===== LOGGING MUST BE CONFIGURED FIRST =====
+from logging.config import dictConfig
+from app.core.logging_config import LOGGING_CONFIG
+
+dictConfig(LOGGING_CONFIG)
+
+# ===== NOW IMPORT THE REST =====
 import asyncio
 import logging
 import sys
@@ -9,15 +16,6 @@ from app.api import home
 from app.core.cache import init_redis_client, close_redis_client
 from app.core.clients import product_service_client
 from app.workers.kafka_consumer import consume_and_invalidate_cache
-
-# Configure logging BEFORE any imports that use loggers
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),  # Log to console
-    ]
-)
 
 logger = logging.getLogger(__name__)
 

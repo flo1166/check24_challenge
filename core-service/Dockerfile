@@ -28,6 +28,8 @@ ENV PATH=/root/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
+RUN mkdir -p /app/logs
+
 # Copy application code
 COPY ./app /app/app
 

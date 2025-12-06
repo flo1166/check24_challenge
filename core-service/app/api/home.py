@@ -8,7 +8,6 @@ from app.core.clients import fetch_car_insurance_widget_swr
 from app.core.models import Widget, WidgetResponse
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
 
 router = APIRouter()
 
@@ -36,12 +35,10 @@ async def fetch_and_serialize_widgets():
                 logger.info(f"fetch_and_serialize_widgets: Extracted {len(widgets_data)} widgets from response")
                 return widgets_data
             else:
-                # If it's already a widget dict, wrap it in a list
                 logger.info("fetch_and_serialize_widgets: Single widget dict, wrapping in list")
                 return [result]
         
         elif isinstance(result, list):
-            # Already a list, return as-is
             logger.info(f"fetch_and_serialize_widgets: Received list of {len(result)} widgets")
             return result
         
@@ -71,7 +68,7 @@ async def get_home_page_widgets(background_tasks: BackgroundTasks):
             background_tasks=background_tasks
         )
         
-        logger.debug(f"get_home_page_widgets: Received from cache/fetch: {type(widgets_data)} with {len(widgets_data) if isinstance(widgets_data, list) else 'unknown'} items")
+        logger.debug(f"get_home_page_widgets: Received from cache/fetch: {type(widgets_data)}")
         
         # Ensure we have a list
         if not isinstance(widgets_data, list):
@@ -92,7 +89,7 @@ async def get_home_page_widgets(background_tasks: BackgroundTasks):
         return widget_response
     
     except HTTPException:
-        # Re-raise HTTP exceptions
+        logger.debug("[DEBUG] HTTPException raised - re-raising")
         raise
     
     except Exception as e:

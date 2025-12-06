@@ -5,7 +5,6 @@ from aiokafka import AIOKafkaConsumer # Non-blocking Kafka client
 from app.core.cache import redis_client # Re-use the existing async redis client
 import os
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 logging.getLogger("aiokafka").setLevel(logging.INFO)
 
