@@ -10,10 +10,42 @@ export default function HomePage({ data, loading, error, onRetry }) {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [activeCategory, setActiveCategory] = useState(null);
   const [carouselHeight, setCarouselHeight] = useState('auto');
+  const [selectedCarInsurance, setSelectedCarInsurance] = useState(null);
   const carouselRef = useRef(null);
 
   const handleBoughtKonto = () => {
     updateNotification('cart', 1);
+  };
+
+  /**
+   * Called when user adds a car insurance widget to cart
+   * Saves the widget data to pass to InsuranceCentre
+   */
+  const handleCarInsuranceAdded = async (widgetData) => {
+    // 1. Update UI first (instant)
+    setSelectedCarInsurance(widgetData);
+    
+    const userId = 123; // TODO: Get from auth context
+    const apiUrl = `http://localhost:8001/widget/car-insurance/contract`;
+    
+    const payload = {
+      user_id: userId,
+      widget_id: widgetData.widget_id,
+    };
+
+    // 2. Save to database
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest', // Force preflight
+        },
+        body: JSON.stringify(payload),
+      });
+    
+    const result = await response.json();
+    console.log('Contract ID:', result.contract_id);
   };
 
   // Measure the tallest card and set carousel height
@@ -88,7 +120,10 @@ export default function HomePage({ data, loading, error, onRetry }) {
 
       {/*Insurance Centre */}
       <section className="mb-16">
-        <InsuranceCentre cartCount={notifications.cart} />
+        <InsuranceCentre 
+          cartCount={notifications.cart} 
+          selectedCarInsurance={selectedCarInsurance}
+        />
       </section>
 
       {/* Widgets Carousel */}
@@ -113,7 +148,11 @@ export default function HomePage({ data, loading, error, onRetry }) {
                         data-carousel-slide
                         className="w-full lg:w-1/3 flex-shrink-0 px-3"
                       >
-                        <WidgetRenderer widget={widget} index={index} />
+                        <WidgetRenderer 
+                          widget={widget} 
+                          index={index}
+                          onAddToCart={handleCarInsuranceAdded}
+                        />
                       </div>
                     ))}
                 </div>

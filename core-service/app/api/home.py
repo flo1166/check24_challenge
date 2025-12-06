@@ -4,7 +4,7 @@ from typing import List
 from fastapi import APIRouter, status, HTTPException, BackgroundTasks
 
 from app.core.cache import get_with_swr
-from app.core.clients import fetch_car_insurance_widget_swr
+from app.core.clients import fetch_car_insurance_widget_swr, fetch_user_contracts
 from app.core.models import Widget, WidgetResponse
 
 logger = logging.getLogger(__name__)
@@ -99,6 +99,33 @@ async def get_home_page_widgets(background_tasks: BackgroundTasks):
             detail=f"Service error: {str(e)}"
         )
 
+@router.get("/user/{user_id}/contracts")
+async def get_user_contracts(user_id: int):
+    """
+    Fetches the user's car insurance contracts.
+    Returns the contract widget if the user has one, otherwise returns empty.
+    """
+    logger.info(f"get_user_contracts: Fetching contracts for user {user_id}")
+    
+    try:
+        contract_data = await fetch_user_contracts(user_id)
+        
+        if not contract_data:
+            logger.info(f"get_user_contracts: No contracts found for user {user_id}")
+            return {"has_contract": False, "contract": None}
+        
+        logger.info(f"get_user_contracts: Contract found for user {user_id}")
+        return {
+            "has_contract": True,
+            "contract": contract_data
+        }
+    
+    except Exception as e:
+        logger.error(f"get_user_contracts: Exception - {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching contracts: {str(e)}"
+        )
 
 @router.get("/health")
 async def health():

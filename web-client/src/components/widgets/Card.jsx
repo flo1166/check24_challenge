@@ -11,7 +11,7 @@ import { Heart, ShoppingCart } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { getImageUrl } from '../../utils/imageLoader';
 
-export default function Card({ data }) {
+export default function Card({ data, widgetData, onAddToCart }) {
   const { updateNotification } = useNotifications();
   const [isFavorite, setIsFavorite] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
@@ -26,10 +26,18 @@ export default function Card({ data }) {
 
   /**
    * Handle adding item to cart
-   * Updates global notification count
+   * Updates global notification count AND passes widget data to parent
    */
   const handleAddToCart = () => {
+    // Update cart count notification
     updateNotification('cart', 1);
+    
+    // Pass the entire widget data to parent (HomePage)
+    if (onAddToCart && widgetData) {
+      onAddToCart(widgetData);
+    }
+    
+    // Show "Added!" feedback
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000); // Reset after 2s
   };

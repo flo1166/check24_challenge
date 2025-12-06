@@ -9,12 +9,14 @@ import random
 import logging
 import os
 from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, String, Integer
 from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import JSONB
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,10 @@ class Contracts(Base):
     widget_id = Column(String(100))
     id = Column(Integer, primary_key=True, autoincrement=True)
 
+class ContractRequest(BaseModel):
+    user_id: int
+    widget_id: str
+
 # --- 3. FastAPI Dependency for Database Session (KEPT) ---
 def get_db():
     """Dependency that yields a database session and ensures it's closed."""
@@ -98,6 +104,14 @@ def get_db():
 # --- 4. FastAPI App Initialization and Endpoint ---
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # 3. Allow your frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():
@@ -150,12 +164,43 @@ def get_car_insurance_widget(db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not retrieve data from product service database (DB Connection Error)."
         )
+    
+@app.get("/widget/car-insurance/{widget_id}")
+def get_car_insurance_widget(widget_id: str, db: Session = Depends(get_db)):
+    """
+    Fetches specific car insurance widgets from the database using SQLAlchemy ORM.
+    """
+    logger.info('API call: /widget/car-insurance starts')
+    
+    try:
+        # 2. Query all 'default' widgets (the 10 car deals)
+        stmt = select(Widget).filter(Widget.user_id == 123).filter(Widget.widget_id == widget_id).limit(1)
+        widgets_orm = db.scalars(stmt).all()
+        
+        # 3. Format the results into the SDUI response structure
+        widgets_list = [widget.to_sdui_format() for widget in widgets_orm]
+        
+        logger.info(f'API call: /widget/car-insurance {len(widgets_list)} widgets were loaded')
 
-@app.post("/widget/car-insurance/contract/{user_id}/{widget_id}")
-def post_car_insurance_contract(user_id: int, widget_id: str, db: Session = Depends(get_db)):
+        return {
+            "widgets": widgets_list
+        }
+
+    except OperationalError as e:
+        logger.error(f"Database query error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not retrieve data from product service database (DB Connection Error)."
+        )
+
+@app.post("/widget/car-insurance/contract")
+def post_car_insurance_contract(contract_data: ContractRequest, db: Session = Depends(get_db)):
     """
     Endpoint to create a contract for a given user and widget.
     """
+    user_id = contract_data.user_id
+    widget_id = contract_data.widget_id
+
     logger.info(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} starts')
     
     try:
@@ -163,11 +208,13 @@ def post_car_insurance_contract(user_id: int, widget_id: str, db: Session = Depe
         new_contract = Contracts(user_id=user_id, widget_id=widget_id)
         db.add(new_contract)
         db.commit()
+        db.refresh(new_contract) # Get the newly created object with its ID
         
-        logger.info(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} completed successfully')
+        logger.info(f'API call completed successfully. Contract ID: {new_contract.id}')
 
         return {
             "message": "Contract created successfully",
+            "contract_id": new_contract.id, # Return the DB ID
             "user_id": user_id,
             "widget_id": widget_id
         }
@@ -220,33 +267,27 @@ def delete_car_insurance_contract(user_id: int, widget_id: str, db: Session = De
 @app.get("/widget/car-insurance/contract/{user_id}")
 def get_car_insurance_contracts(user_id: int, db: Session = Depends(get_db)):
     """
-    Endpoint to retrieve all contracts for a given user.
+    Endpoint to retrieve car contracts for a given user.
     """
     logger.info(f'API call: /widget/car-insurance/contract/{user_id} starts')
     
     try:
         # Query all contracts for the user
         stmt = select(Contracts).filter(Contracts.user_id == user_id)
-        contracts_orm = db.scalars(stmt).all()
+        contracts_orm = db.scalars(stmt).first()
         
-        contracts_list = [
-            {
-                "user_id": contract.user_id,
-                "widget_id": contract.widget_id
-            } for contract in contracts_orm
-        ]
-        
-        logger.info(f'API call: /widget/car-insurance/contract/{user_id} retrieved {len(contracts_list)} contracts')
+        stmt = select(Widget).filter(Widget.widget_id == contracts_orm.widget_id)
+        widgets_orm = db.scalars(stmt).first()
 
-        return {
-            "contracts": contracts_list
-        }
+        logger.info(f'API call: /widget/car-insurance/contract/{user_id} retrieved widget sucessfully')
+
+        return widgets_orm
 
     except OperationalError as e:
         logger.error(f"Database query error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not retrieve contracts from product service database (DB Connection Error)."
+            detail="Could not retrieve contract widget data from product service database (DB Connection Error)."
         )
 
 

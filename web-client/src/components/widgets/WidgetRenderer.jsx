@@ -23,7 +23,7 @@ const COMPONENT_MAP = {
   // etc.
 };
 
-export default function WidgetRenderer({ widget, index }) {
+export default function WidgetRenderer({ widget, index, onAddToCart }) {
   if (!widget) {
     console.warn('⚠️ WidgetRenderer: widget is undefined');
     return null;
@@ -40,7 +40,7 @@ export default function WidgetRenderer({ widget, index }) {
     );
     return (
       <div key={widget_id || index} data-component-type={component_type} data-priority={priority} className="h-full">
-        <Card data={data || widget} />
+        <Card data={data || widget} widgetData={widget} onAddToCart={onAddToCart} />
       </div>
     );
   }
@@ -54,7 +54,7 @@ export default function WidgetRenderer({ widget, index }) {
       className="h-full" 
     >
       <Suspense fallback={<Loader />}>
-        <Component data={data || widget} />
+        <Component data={data || widget} widgetData={widget} onAddToCart={onAddToCart} />
       </Suspense>
     </div>
   );

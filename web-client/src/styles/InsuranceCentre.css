@@ -1,369 +1,331 @@
 /**
  * =========================================================================
- * InsuranceCentre.css - Insurance Centre Styling & Animations
+ * InsuranceCentre.css - Insurance Centre Styles
  * =========================================================================
- * Uses Check24 theme colors:
- * - Locked: Grey icons and background
- * - Unlocked: Blue icons and white background
- * - Smooth flip animations
+ * Styles for the insurance category flip cards with contract details.
  */
 
+/* ========== CONTAINER ========== */
 .insurance-centre {
-  padding: 0;
-  margin-bottom: 48px;
-}
-
-/* ========== HEADER ========== */
-
-.insurance-centre-header {
-  text-align: center;
-  margin-bottom: 40px;
-  animation: fadeInDown 500ms ease-out forwards;
-}
-
-.insurance-centre-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--c24-text-dark);
-  margin-bottom: 8px;
-  letter-spacing: -0.5px;
-}
-
-.insurance-centre-subtitle {
-  font-size: 13px;
-  color: var(--c24-text-muted);
-  line-height: 1.6;
-  margin: 0;
+  width: 100%;
+  padding: 2rem 0;
 }
 
 /* ========== GRID LAYOUT ========== */
-
 .insurance-tiles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 24px;
-  margin-bottom: 32px;
-  perspective: 1000px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
 }
 
-/* Ensure 4 columns on desktop, 2 on tablet, 1 on mobile */
-@media (min-width: 1024px) {
-  .insurance-tiles-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (max-width: 768px) {
   .insurance-tiles-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 480px) {
   .insurance-tiles-grid {
     grid-template-columns: 1fr;
-    gap: 16px;
   }
 }
 
-/* ========== TILE WRAPPER & 3D FLIP ========== */
-
+/* ========== FLIP CARD STRUCTURE ========== */
 .insurance-tile-wrapper {
   perspective: 1000px;
-  height: 280px;
-  cursor: auto;
+  cursor: pointer;
+  height: 300px;
+  position: relative;
 }
 
-/* Make locked tiles non-clickable */
 .insurance-tile-wrapper.locked {
   cursor: not-allowed;
-}
-
-/* Make unlocked tiles clickable */
-.insurance-tile-wrapper.unlocked {
-  cursor: pointer;
 }
 
 .insurance-tile-inner {
   position: relative;
   width: 100%;
   height: 100%;
-  transition: transform 600ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  transition: transform 0.6s;
   transform-style: preserve-3d;
 }
 
-/* Flipped state */
 .insurance-tile-wrapper.flipped .insurance-tile-inner {
   transform: rotateY(180deg);
 }
 
-/* ========== TILE FRONT ========== */
-
-.insurance-tile-front {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  backface-visibility: hidden;
-  transform-style: preserve-3d;
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-
-  background: white;
-  border: 1px solid var(--c24-border-gray);
-  border-radius: var(--c24-radius-md);
-  padding: 20px;
-  box-shadow: var(--c24-shadow-md);
-  transition: all 300ms ease;
-}
-
-/* Locked state styling */
-.insurance-tile-wrapper.locked .insurance-tile-front {
-  background-color: var(--c24-super-light-gray);
-  border-color: var(--c24-border-gray);
-}
-
-/* Unlocked hover effect */
-.insurance-tile-wrapper.unlocked .insurance-tile-front:hover {
-  box-shadow: var(--c24-shadow-lg);
-  transform: translateY(-2px);
-  border-color: var(--c24-primary-medium);
-}
-
-/* ========== TILE BACK ========== */
-
+/* ========== FRONT & BACK FACES ========== */
+.insurance-tile-front,
 .insurance-tile-back {
   position: absolute;
   width: 100%;
   height: 100%;
   backface-visibility: hidden;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.insurance-tile-front {
+  background: white;
+  border: 2px solid #e5e7eb;
+}
+
+.insurance-tile-back {
+  background: white;
+  border: 2px solid var(--c24-primary-medium);
   transform: rotateY(180deg);
-  transform-style: preserve-3d;
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  border-radius: var(--c24-radius-md);
-  box-shadow: var(--c24-shadow-lg);
-
-  background: linear-gradient(135deg, var(--c24-primary-medium) 0%, var(--c24-primary-deep) 100%);
 }
 
-.back-content {
-  text-align: center;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
+/* ========== LOCKED STATE ========== */
+.insurance-tile-wrapper.locked .insurance-tile-front {
+  background: #f3f4f6;
+  border-color: #d1d5db;
 }
 
-.back-title {
-  font-size: 15px;
-  font-weight: 700;
-  margin: 0;
-  letter-spacing: -0.3px;
-}
-
-.back-description {
-  font-size: 12px;
-  opacity: 0.95;
-  margin: 0;
-  line-height: 1.5;
-}
-
-.back-actions {
-  margin-top: 12px;
-  width: 100%;
-}
-
-.back-button {
-  width: 100%;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1.5px solid rgba(255, 255, 255, 0.3);
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: var(--c24-radius-sm);
-  cursor: pointer;
-  transition: all 200ms ease;
-}
-
-.back-button:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: scale(1.05);
-}
-
-.back-button:active {
-  transform: scale(0.98);
-}
-
-/* ========== ICON CONTAINER ========== */
-
-.icon-container {
-  width: 80px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 300ms ease;
-}
-
-/* Locked icons are grey */
-.insurance-tile-wrapper.locked .icon-container {
-  color: var(--c24-text-muted);
-}
-
-/* Unlocked icons are blue */
-.insurance-tile-wrapper.unlocked .icon-container {
-  color: var(--c24-primary-medium);
-}
-
-.insurance-icon {
-  width: 100%;
-  height: 100%;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: all 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* Animate icon on unlock */
-.insurance-tile-wrapper.unlocked .insurance-icon {
-  animation: iconPulse 600ms ease-out 1;
-}
-
-@keyframes iconPulse {
-  0% {
-    transform: scale(0.6);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* ========== LABEL ========== */
-
-.insurance-tile-label {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--c24-black);
-  margin: 0;
-  letter-spacing: -0.2px;
-  transition: color 200ms ease;
-  text-align: center;
+.insurance-tile-wrapper.locked .insurance-icon {
+  color: #9ca3af;
 }
 
 .insurance-tile-wrapper.locked .insurance-tile-label {
-  color: var(--c24-text-muted);
+  color: #9ca3af;
 }
 
-.insurance-tile-wrapper.unlocked .insurance-tile-front:hover .insurance-tile-label {
+/* ========== UNLOCKED STATE ========== */
+.insurance-tile-wrapper.unlocked .insurance-tile-front {
+  background: white;
+  border-color: var(--c24-primary-medium);
+}
+
+.insurance-tile-wrapper.unlocked .insurance-icon {
   color: var(--c24-primary-medium);
 }
 
-/* ========== ANIMATIONS ========== */
+.insurance-tile-wrapper.unlocked .insurance-tile-label {
+  color: var(--c24-black);
+}
 
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
+/* Hover effect for unlocked cards */
+.insurance-tile-wrapper.unlocked:hover .insurance-tile-front {
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.15);
+  transform: translateY(-4px);
+  transition: all 0.3s ease;
+}
+
+/* ========== FRONT CARD CONTENT ========== */
+.icon-container {
+  margin-bottom: 1rem;
+}
+
+.insurance-icon {
+  width: 80px;
+  height: 80px;
+}
+
+.insurance-tile-label {
+  font-size: 1.125rem;
+  font-weight: 600;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+/* Contract Badge */
+.contract-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: var(--c24-success-green);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* ========== BACK CARD CONTENT ========== */
+.back-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Contract Logo */
+.contract-logo-container {
+  width: 100%;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  background: white;
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.contract-logo {
+  max-width: 120px;
+  max-height: 50px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Text Content */
+.back-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--c24-black);
+  margin-bottom: 0.75rem;
+  line-height: 1.3;
+  width: 100%;
+}
+
+.back-subtitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--c24-black);
+  margin-bottom: 1.5rem;
+  line-height: 1.4;
+  width: 100%;
+  min-height: 1.2rem; /* Ensure space even if empty */
+}
+
+.back-description {
+  font-size: 0.875rem;
+  color: var(--c24-text-muted);
+  margin-bottom: 1rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Action Buttons */
+.back-actions {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: auto;
+}
+
+.back-button {
+  flex: 1;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.back-button-primary {
+  background: var(--c24-primary-medium);
+  color: white;
+}
+
+.back-button-primary:hover {
+  background: var(--c24-hover-blue);
+}
+
+.back-button-secondary {
+  background: transparent;
+  color: var(--c24-primary-medium);
+  border: 2px solid var(--c24-primary-medium);
+}
+
+.back-button-secondary:hover {
+  background: var(--c24-light-gray);
+}
+
+/* Default button (when no contract) */
+.back-button:not(.back-button-primary):not(.back-button-secondary) {
+  background: var(--c24-primary-medium);
+  color: white;
+  width: 100%;
+}
+
+.back-button:not(.back-button-primary):not(.back-button-secondary):hover {
+  background: var(--c24-hover-blue);
+}
+
+/* ========== ANIMATIONS ========== */
+@keyframes glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(5, 99, 193, 0.3);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  50% {
+    box-shadow: 0 0 20px rgba(5, 99, 193, 0.6);
   }
 }
 
-/* ========== RESPONSIVE ========== */
+.insurance-tile-wrapper.unlocked.glow .insurance-tile-front {
+  animation: glow 1.3s ease-in-out;
+}
 
+/* ========== LOADING STATE ========== */
+.insurance-centre-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+/* ========== RESPONSIVE ADJUSTMENTS ========== */
 @media (max-width: 768px) {
-  .insurance-centre-title {
-    font-size: 22px;
-  }
-
-  .insurance-tiles-grid {
-    gap: 16px;
-  }
-
   .insurance-tile-wrapper {
-    height: 240px;
+    height: 280px;
   }
 
-  .icon-container {
+  .insurance-tile-front,
+  .insurance-tile-back {
+    padding: 1.5rem;
+  }
+
+  .insurance-icon {
     width: 60px;
     height: 60px;
   }
 
-  .insurance-tile-label {
-    font-size: 12px;
+  .back-title {
+    font-size: 1rem;
+  }
+
+  .back-subtitle,
+  .back-description {
+    font-size: 0.8125rem;
   }
 }
 
 @media (max-width: 480px) {
-  .insurance-centre {
-    margin-bottom: 32px;
-  }
-
-  .insurance-centre-title {
-    font-size: 20px;
-    margin-bottom: 6px;
-  }
-
-  .insurance-centre-subtitle {
-    font-size: 11px;
-  }
-
-  .insurance-tiles-grid {
-    gap: 12px;
-  }
-
   .insurance-tile-wrapper {
-    height: 200px;
+    height: 260px;
   }
 
-  .icon-container {
-    width: 50px;
+  .insurance-tile-front,
+  .insurance-tile-back {
+    padding: 1rem;
+  }
+
+  .contract-logo-container {
     height: 50px;
   }
 
-  .insurance-tile-front {
-    padding: 16px;
-    gap: 12px;
-  }
-}
-
-/* ========== ACCESSIBILITY ========== */
-
-.insurance-tile-wrapper:focus {
-  outline: 2px solid var(--c24-focus-blue);
-  outline-offset: 4px;
-  border-radius: var(--c24-radius-md);
-}
-
-/* Prefers reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .insurance-tile-inner,
-  .insurance-icon,
-  .icon-container,
-  .insurance-centre-header {
-    animation: none !important;
-    transition: none !important;
-  }
-
-  .insurance-tile-wrapper.flipped .insurance-tile-inner {
-    transform: rotateY(180deg);
+  .contract-logo {
+    max-width: 100px;
+    max-height: 40px;
   }
 }

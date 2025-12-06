@@ -167,6 +167,64 @@ class ProductServiceClient:
             logger.error(f"ProductServiceClient: Unexpected error - {type(e).__name__}: {e}")
             print(f"[DEBUG] Unexpected error: {type(e).__name__}: {e}")
             return FALLBACK_WIDGET_PAYLOAD
+
+    @product_service_breaker
+    async def fetch_user_car_contracts(self, user_id: int) -> Dict[str, Any]:
+        """
+        Fetches the user's car insurance contracts from the mock service.
+        Protected by the circuit breaker.
+        """
+        print(f"[DEBUG] fetch_user_car_contracts: Fetching contracts for user {user_id}")
+        logger.info(f"ProductServiceClient: Fetching contracts for user {user_id}")
+        
+        try:
+            response = await self.client.get(f"/widget/car-insurance/contract/{user_id}")
+            print(f"[DEBUG] Response status: {response.status_code}")
+            logger.info(f"Response status: {response.status_code}")
+            
+            response.raise_for_status()
+            result = response.json()
+            print(f"[DEBUG] Contract response JSON: {result}")
+            logger.info(f"Contract response received: {type(result)}")
+            return result
+            
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                logger.info(f"No contracts found for user {user_id}")
+                return None
+            print(f"[DEBUG] HTTP Status Error: {type(e).__name__}: {e}")
+            logger.error(f"HTTP status error: {type(e).__name__}: {e}")
+            raise
+        except httpx.HTTPError as e:
+            print(f"[DEBUG] HTTP Error: {type(e).__name__}: {e}")
+            logger.error(f"HTTP error: {type(e).__name__}: {e}")
+            raise
+        except Exception as e:
+            print(f"[DEBUG] Exception in fetch_user_car_contracts: {type(e).__name__}: {e}")
+            logger.error(f"Exception: {type(e).__name__}: {e}")
+            raise
+
+    async def get_user_car_contracts(self, user_id: int) -> Dict[str, Any]:
+        """
+        Handles fetching user contracts with resilience/fallback logic.
+        """
+        try:
+            data = await self.fetch_user_car_contracts(user_id)
+            logger.info(f"ProductServiceClient: Contract fetch succeeded for user {user_id}")
+            print(f"[DEBUG] Contract fetch succeeded for user {user_id}")
+            return data if data else {}
+        except CircuitBreakerError as e:
+            logger.error(f"ProductServiceClient: Circuit Breaker OPEN: {e}")
+            print(f"[DEBUG] Circuit breaker OPEN: {e}")
+            return {}
+        except httpx.HTTPError as e:
+            logger.error(f"ProductServiceClient: HTTP error - {type(e).__name__}: {e}")
+            print(f"[DEBUG] HTTP error: {type(e).__name__}: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"ProductServiceClient: Unexpected error - {type(e).__name__}: {e}")
+            print(f"[DEBUG] Unexpected error: {type(e).__name__}: {e}")
+            return {}
             
     async def close(self):
         """Closes the underlying HTTP client connection."""
@@ -176,7 +234,7 @@ class ProductServiceClient:
 # Global client instance
 MOCK_PRODUCT_SERVICE_BASE_URL = os.getenv(
     "MOCK_PRODUCT_SERVICE_URL", 
-    "http://localhost:8001"  # Changed default to localhost
+    "http://localhost:8001"
 )
 product_service_client = ProductServiceClient(base_url=MOCK_PRODUCT_SERVICE_BASE_URL)
 
@@ -186,7 +244,11 @@ async def fetch_car_insurance_widget_swr():
     """
     return await product_service_client.get_car_insurance_widget_model_swr()
 
-
+async def fetch_user_contracts(user_id: int):
+    """
+    The public-facing async function to fetch user contracts.
+    """
+    return await product_service_client.get_user_car_contracts(user_id)
 
 
 
