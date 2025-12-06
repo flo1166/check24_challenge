@@ -49,8 +49,8 @@ class Widget(Base):
     """
     __tablename__ = "widgets"
 
-    user_id = Column(String(50), index=True) 
-    widget_id = Column(String(50), primary_key=True)
+    user_id = Column(Integer, index=True) 
+    widget_id = Column(String(100), primary_key=True)
     component_type = Column(String(50), index=True)
     priority = Column(Integer, default=0)
     data = Column(JSONB, nullable=False) # Maps to the JSONB column in the DB
@@ -63,6 +63,17 @@ class Widget(Base):
             "data": self.data, # This is the dynamic dictionary from the JSONB field
             "priority": self.priority
         }
+
+class Contracts(Base):
+    """
+    SQLAlchemy model reflecting the new, simplified database structure.
+    It now uses JSONB for the dynamic data field.
+    """
+    __tablename__ = "contracts"
+
+    user_id = Column(Integer) 
+    widget_id = Column(String(100))
+    id = Column(Integer, primary_key=True, autoincrement=True)
 
 # --- 3. FastAPI Dependency for Database Session (KEPT) ---
 def get_db():
@@ -121,7 +132,7 @@ def get_car_insurance_widget(db: Session = Depends(get_db)):
         
     try:
         # 2. Query all 'default' widgets (the 10 car deals)
-        stmt = select(Widget).filter(Widget.user_id == '123').order_by(func.random()).limit(6)
+        stmt = select(Widget).filter(Widget.user_id == 123).order_by(func.random()).limit(6)
         widgets_orm = db.scalars(stmt).all()
         
         # 3. Format the results into the SDUI response structure
@@ -139,6 +150,105 @@ def get_car_insurance_widget(db: Session = Depends(get_db)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not retrieve data from product service database (DB Connection Error)."
         )
+
+@app.post("/widget/car-insurance/contract/{user_id}/{widget_id}")
+def post_car_insurance_contract(user_id: int, widget_id: str, db: Session = Depends(get_db)):
+    """
+    Endpoint to create a contract for a given user and widget.
+    """
+    logger.info(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} starts')
+    
+    try:
+        # Create a new contract entry
+        new_contract = Contracts(user_id=user_id, widget_id=widget_id)
+        db.add(new_contract)
+        db.commit()
+        
+        logger.info(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} completed successfully')
+
+        return {
+            "message": "Contract created successfully",
+            "user_id": user_id,
+            "widget_id": widget_id
+        }
+
+    except OperationalError as e:
+        logger.error(f"Database insert error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not create contract in product service database (DB Connection Error)."
+        )
+
+@app.delete("/widget/car-insurance/contract/{user_id}/{widget_id}")
+def delete_car_insurance_contract(user_id: int, widget_id: str, db: Session = Depends(get_db)):
+    """
+    Endpoint to delete a contract for a given user and widget.
+    """
+    logger.info(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} starts')
+    
+    try:
+        # Delete the contract entry
+        stmt = select(Contracts).filter(
+            Contracts.user_id == user_id,
+            Contracts.widget_id == widget_id
+        )
+        contract = db.scalars(stmt).first()
+        
+        if contract:
+            db.delete(contract)
+            db.commit()
+            logger.info(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} deleted successfully')
+            return {
+                "message": "Contract deleted successfully",
+                "user_id": user_id,
+                "widget_id": widget_id
+            }
+        else:
+            logger.warning(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} not found')
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Contract not found."
+            )
+
+    except OperationalError as e:
+        logger.error(f"Database delete error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not delete contract in product service database (DB Connection Error)."
+        )
+    
+@app.get("/widget/car-insurance/contract/{user_id}")
+def get_car_insurance_contracts(user_id: int, db: Session = Depends(get_db)):
+    """
+    Endpoint to retrieve all contracts for a given user.
+    """
+    logger.info(f'API call: /widget/car-insurance/contract/{user_id} starts')
+    
+    try:
+        # Query all contracts for the user
+        stmt = select(Contracts).filter(Contracts.user_id == user_id)
+        contracts_orm = db.scalars(stmt).all()
+        
+        contracts_list = [
+            {
+                "user_id": contract.user_id,
+                "widget_id": contract.widget_id
+            } for contract in contracts_orm
+        ]
+        
+        logger.info(f'API call: /widget/car-insurance/contract/{user_id} retrieved {len(contracts_list)} contracts')
+
+        return {
+            "contracts": contracts_list
+        }
+
+    except OperationalError as e:
+        logger.error(f"Database query error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not retrieve contracts from product service database (DB Connection Error)."
+        )
+
 
 if __name__ == "__main__":
     import uvicorn

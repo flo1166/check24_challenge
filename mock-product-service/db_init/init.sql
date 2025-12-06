@@ -1,7 +1,8 @@
 -- Drop table to ensure clean run if needed
+DROP TABLE IF EXISTS contracts;
 DROP TABLE IF EXISTS widgets;
 
--- 1. Create the widgets table with JSONB
+--- 1. CREATE THE WIDGETS TABLE (UNCHANGED)
 CREATE TABLE widgets (
     user_id INTEGER NOT NULL,
     widget_id VARCHAR(100) PRIMARY KEY,
@@ -9,6 +10,24 @@ CREATE TABLE widgets (
     priority INTEGER DEFAULT 0,
     data JSONB NOT NULL, -- Stores the dynamic data dictionary
     UNIQUE (user_id, widget_id)
+);
+
+--- 2. CREATE THE CONTRACTS TABLE (NEWLY ADDED)
+-- Based on the structure you provided:
+-- user_id (integer), widget_id (varchar(100)), id (integer, primary key, auto-increment), type (varchar(50))
+-- The `id` column will be automatically created as a serial/identity column in modern SQL.
+CREATE TABLE contracts (
+    id SERIAL PRIMARY KEY, -- Auto-incrementing primary key
+    user_id INTEGER NOT NULL,
+    widget_id VARCHAR(100) NOT NULL,
+    type VARCHAR(50) DEFAULT 'car_insurance', -- Assuming a default type is useful
+    
+    -- Define the Foreign Key relationship linking to the widgets table
+    CONSTRAINT fk_widget
+        FOREIGN KEY (widget_id)
+        REFERENCES widgets (widget_id)
+        ON DELETE NO ACTION
+        ON UPDATE NO ACTION
 );
 
 -- 2. Insert all 34 entries (Header, Info Boxes, and Tariffs 1-40) in a single command
