@@ -3,9 +3,10 @@ import WidgetRenderer from '../components/widgets/WidgetRenderer';
 import Loader from '../components/common/Loader';
 import { useNotifications } from '../contexts/NotificationContext';
 import CategoryNav from "../components/navigation/CategoryNav";
+import InsuranceCentre from '../components/layout/InsuranceCentre';
 
 export default function HomePage({ data, loading, error, onRetry }) {
-  const { updateNotification } = useNotifications();
+  const { updateNotification, notifications  } = useNotifications();
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [activeCategory, setActiveCategory] = useState(null);
   const [carouselHeight, setCarouselHeight] = useState('auto');
@@ -83,6 +84,11 @@ export default function HomePage({ data, loading, error, onRetry }) {
         <p className="text-lg opacity-90 mb-8">
           Find the best insurance deals tailored to your needs
         </p>
+      </section>
+
+      {/*Insurance Centre */}
+      <section className="mb-16">
+        <InsuranceCentre cartCount={notifications.cart} />
       </section>
 
       {/* Widgets Carousel */}

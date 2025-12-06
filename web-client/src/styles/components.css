@@ -429,6 +429,26 @@
   cursor: not-allowed;
 }
 
+/* ========== INSURANCE CENTRE ========== */
+
+.c24-card-insurance-centre {
+  background: white;
+  border: 1px solid var(--c24-border-gray);
+  border-radius: var(--c24-radius-md);
+  overflow: hidden;
+  transition: all var(--c24-transition-base);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-shadow: var(--c24-shadow-md);
+}
+
+.c24-card-insurance-centre:hover {
+  box-shadow: var(--c24-shadow-lg);
+  border-color: var(--c24-primary-medium);
+  transform: translateY(-2px);
+}
+
 /* ========== FOOTER ========== */
 
 .c24-footer {

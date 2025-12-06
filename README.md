@@ -6,7 +6,7 @@ docker compose up --build -d
 # Access product db:
 Access the Database Visually
 
-    Open your web browser and navigate to http://localhost:8080.
+    Open your web browser and navigate to http://localhost:8081.
 
     On the Adminer login screen, enter the connection details for your product-db:
 

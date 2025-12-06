@@ -1,0 +1,369 @@
+/**
+ * =========================================================================
+ * InsuranceCentre.css - Insurance Centre Styling & Animations
+ * =========================================================================
+ * Uses Check24 theme colors:
+ * - Locked: Grey icons and background
+ * - Unlocked: Blue icons and white background
+ * - Smooth flip animations
+ */
+
+.insurance-centre {
+  padding: 0;
+  margin-bottom: 48px;
+}
+
+/* ========== HEADER ========== */
+
+.insurance-centre-header {
+  text-align: center;
+  margin-bottom: 40px;
+  animation: fadeInDown 500ms ease-out forwards;
+}
+
+.insurance-centre-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--c24-text-dark);
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
+}
+
+.insurance-centre-subtitle {
+  font-size: 13px;
+  color: var(--c24-text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ========== GRID LAYOUT ========== */
+
+.insurance-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  margin-bottom: 32px;
+  perspective: 1000px;
+}
+
+/* Ensure 4 columns on desktop, 2 on tablet, 1 on mobile */
+@media (min-width: 1024px) {
+  .insurance-tiles-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .insurance-tiles-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .insurance-tiles-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* ========== TILE WRAPPER & 3D FLIP ========== */
+
+.insurance-tile-wrapper {
+  perspective: 1000px;
+  height: 280px;
+  cursor: auto;
+}
+
+/* Make locked tiles non-clickable */
+.insurance-tile-wrapper.locked {
+  cursor: not-allowed;
+}
+
+/* Make unlocked tiles clickable */
+.insurance-tile-wrapper.unlocked {
+  cursor: pointer;
+}
+
+.insurance-tile-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 600ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  transform-style: preserve-3d;
+}
+
+/* Flipped state */
+.insurance-tile-wrapper.flipped .insurance-tile-inner {
+  transform: rotateY(180deg);
+}
+
+/* ========== TILE FRONT ========== */
+
+.insurance-tile-front {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+
+  background: white;
+  border: 1px solid var(--c24-border-gray);
+  border-radius: var(--c24-radius-md);
+  padding: 20px;
+  box-shadow: var(--c24-shadow-md);
+  transition: all 300ms ease;
+}
+
+/* Locked state styling */
+.insurance-tile-wrapper.locked .insurance-tile-front {
+  background-color: var(--c24-super-light-gray);
+  border-color: var(--c24-border-gray);
+}
+
+/* Unlocked hover effect */
+.insurance-tile-wrapper.unlocked .insurance-tile-front:hover {
+  box-shadow: var(--c24-shadow-lg);
+  transform: translateY(-2px);
+  border-color: var(--c24-primary-medium);
+}
+
+/* ========== TILE BACK ========== */
+
+.insurance-tile-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+  transform: rotateY(180deg);
+  transform-style: preserve-3d;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border-radius: var(--c24-radius-md);
+  box-shadow: var(--c24-shadow-lg);
+
+  background: linear-gradient(135deg, var(--c24-primary-medium) 0%, var(--c24-primary-deep) 100%);
+}
+
+.back-content {
+  text-align: center;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.back-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.back-description {
+  font-size: 12px;
+  opacity: 0.95;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.back-actions {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.back-button {
+  width: 100%;
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--c24-radius-sm);
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.back-button:active {
+  transform: scale(0.98);
+}
+
+/* ========== ICON CONTAINER ========== */
+
+.icon-container {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 300ms ease;
+}
+
+/* Locked icons are grey */
+.insurance-tile-wrapper.locked .icon-container {
+  color: var(--c24-text-muted);
+}
+
+/* Unlocked icons are blue */
+.insurance-tile-wrapper.unlocked .icon-container {
+  color: var(--c24-primary-medium);
+}
+
+.insurance-icon {
+  width: 100%;
+  height: 100%;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: all 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Animate icon on unlock */
+.insurance-tile-wrapper.unlocked .insurance-icon {
+  animation: iconPulse 600ms ease-out 1;
+}
+
+@keyframes iconPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ========== LABEL ========== */
+
+.insurance-tile-label {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--c24-black);
+  margin: 0;
+  letter-spacing: -0.2px;
+  transition: color 200ms ease;
+  text-align: center;
+}
+
+.insurance-tile-wrapper.locked .insurance-tile-label {
+  color: var(--c24-text-muted);
+}
+
+.insurance-tile-wrapper.unlocked .insurance-tile-front:hover .insurance-tile-label {
+  color: var(--c24-primary-medium);
+}
+
+/* ========== ANIMATIONS ========== */
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========== RESPONSIVE ========== */
+
+@media (max-width: 768px) {
+  .insurance-centre-title {
+    font-size: 22px;
+  }
+
+  .insurance-tiles-grid {
+    gap: 16px;
+  }
+
+  .insurance-tile-wrapper {
+    height: 240px;
+  }
+
+  .icon-container {
+    width: 60px;
+    height: 60px;
+  }
+
+  .insurance-tile-label {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .insurance-centre {
+    margin-bottom: 32px;
+  }
+
+  .insurance-centre-title {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+
+  .insurance-centre-subtitle {
+    font-size: 11px;
+  }
+
+  .insurance-tiles-grid {
+    gap: 12px;
+  }
+
+  .insurance-tile-wrapper {
+    height: 200px;
+  }
+
+  .icon-container {
+    width: 50px;
+    height: 50px;
+  }
+
+  .insurance-tile-front {
+    padding: 16px;
+    gap: 12px;
+  }
+}
+
+/* ========== ACCESSIBILITY ========== */
+
+.insurance-tile-wrapper:focus {
+  outline: 2px solid var(--c24-focus-blue);
+  outline-offset: 4px;
+  border-radius: var(--c24-radius-md);
+}
+
+/* Prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .insurance-tile-inner,
+  .insurance-icon,
+  .icon-container,
+  .insurance-centre-header {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .insurance-tile-wrapper.flipped .insurance-tile-inner {
+    transform: rotateY(180deg);
+  }
+}
