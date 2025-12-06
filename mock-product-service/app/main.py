@@ -5,9 +5,11 @@ from app.core.logging_config import LOGGING_CONFIG
 dictConfig(LOGGING_CONFIG)
 
 # ===== NOW IMPORT THE REST =====
-import random
 import logging
 import os
+import asyncio
+from datetime import datetime
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, Column, String, Integer
@@ -17,8 +19,16 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import JSONB
 from pydantic import BaseModel
+from aiokafka import AIOKafkaProducer
+from aiokafka.errors import KafkaError
+import json
 
 logger = logging.getLogger(__name__)
+
+# --- Kafka Configuration ---
+KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9093")
+KAFKA_TOPIC = "user.car.insurance.purchased"
+kafka_producer: AIOKafkaProducer = None
 
 # --- 1. Database Configuration and Engine (KEPT) ---
 
@@ -101,13 +111,144 @@ def get_db():
         if db:
             db.close()
 
+# --- Kafka Producer Functions ---
+
+async def init_kafka_producer():
+    """Initialize the Kafka producer on application startup."""
+    global kafka_producer
+    
+    try:
+        kafka_producer = AIOKafkaProducer(
+            bootstrap_servers=KAFKA_BROKER,
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            request_timeout_ms=60000,
+            retry_backoff_ms=500,
+        )
+        
+        # Start the producer with retries
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            try:
+                logger.info(f"Attempting to start Kafka Producer (Attempt {attempt + 1}/{max_attempts})...")
+                await kafka_producer.start()
+                logger.info("✅ Kafka Producer started successfully")
+                return
+            except Exception as e:
+                if attempt == max_attempts - 1:
+                    logger.error(f"❌ Failed to start Kafka Producer after {max_attempts} attempts: {e}")
+                    # Don't raise - allow service to start without Kafka
+                    return
+                logger.warning(f"Connection failed: {e}. Retrying in 5 seconds...")
+                await asyncio.sleep(5)
+                
+    except Exception as e:
+        logger.error(f"Failed to initialize Kafka Producer: {e}")
+
+
+async def publish_contract_event(event_type: str, user_id: int, widget_id: str, contract_id: int = None):
+    """
+    Publish a contract event to Kafka.
+    
+    Args:
+        event_type: "contract_created" or "contract_deleted"
+        user_id: The user ID
+        widget_id: The widget/product ID
+        contract_id: The database ID of the contract (optional for deletion)
+    """
+    if not kafka_producer:
+        logger.warning("Kafka producer not initialized, skipping event publish")
+        return
+    
+    event = {
+        "event_type": event_type,
+        "user_id": user_id,
+        "widget_id": widget_id,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    
+    if contract_id:
+        event["contract_id"] = contract_id
+    
+    try:
+        logger.info(f"📤 Publishing {event_type} event: {event}")
+        
+        # Send message to Kafka
+        await kafka_producer.send_and_wait(KAFKA_TOPIC, event)
+        
+        logger.info(f"✅ Successfully published event to topic '{KAFKA_TOPIC}'")
+        
+    except KafkaError as e:
+        logger.error(f"❌ Failed to publish Kafka event: {e}")
+    except Exception as e:
+        logger.error(f"❌ Unexpected error publishing event: {e}")
+
+
+async def close_kafka_producer():
+    """Close the Kafka producer on application shutdown."""
+    global kafka_producer
+    
+    if kafka_producer:
+        try:
+            await kafka_producer.stop()
+            logger.info("Kafka Producer stopped")
+        except Exception as e:
+            logger.error(f"Error stopping Kafka Producer: {e}")
+
+
+# --- Lifespan Context Manager ---
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Handles the application startup and shutdown events.
+    """
+    # --- STARTUP ---
+    logger.info("=" * 60)
+    logger.info("Mock Product Service starting up...")
+    logger.info("=" * 60)
+    
+    try:
+        # Initialize Kafka Producer
+        logger.info("Initializing Kafka Producer...")
+        await init_kafka_producer()
+        logger.info("✅ Kafka Producer initialized")
+        
+    except Exception as e:
+        logger.warning(f"⚠️ Kafka Producer initialization warning: {e}")
+        # Continue anyway; Kafka might be unavailable in local dev
+    
+    logger.info("=" * 60)
+    logger.info("✅ Mock Product Service ready to accept requests")
+    logger.info("=" * 60)
+    
+    yield  # <-- Application starts accepting requests here
+    
+    # --- SHUTDOWN ---
+    logger.info("=" * 60)
+    logger.info("Mock Product Service shutting down...")
+    logger.info("=" * 60)
+    
+    try:
+        # Close Kafka Producer
+        logger.info("Closing Kafka Producer...")
+        await close_kafka_producer()
+        logger.info("✅ Kafka Producer closed")
+        
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}", exc_info=True)
+    
+    logger.info("=" * 60)
+    logger.info("✅ Mock Product Service shutdown complete")
+    logger.info("=" * 60)
+
+
 # --- 4. FastAPI App Initialization and Endpoint ---
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # 3. Allow your frontend
+    allow_origins=["http://localhost:5173"],  # Allow your frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -129,34 +270,42 @@ def health_check():
 @app.get("/widget/car-insurance")
 def get_car_insurance_widget(db: Session = Depends(get_db)):
     """
-    Fetches all car insurance widgets from the database using SQLAlchemy ORM.
+    Fetches car insurance widgets from the database.
+    If user has ANY contract: Returns EMPTY list (no Card widgets)
+    If user has NO contract: Returns 6 random Card widgets
     """
     logger.info('API call: /widget/car-insurance starts')
     
-    # 1. Simulate a failure rate (Circuit Breaker test) - DISABLED
-    '''
-    if random.random() < 0.2:
-        logger.info('API call: /widget/car-insurance failed (simulated)')
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Simulated upstream service failure"
-        )
-    //TODO: activate random again
-    '''
-        
     try:
-        # 2. Query all 'default' widgets (the 10 car deals)
-        stmt = select(Widget).filter(Widget.user_id == 123).order_by(func.random()).limit(6)
-        widgets_orm = db.scalars(stmt).all()
+        # Get user_id (hardcoded for now, should come from auth)
+        user_id = 123
         
-        # 3. Format the results into the SDUI response structure
+        # Check if user has ANY contracts
+        stmt_contracts = select(func.count(Contracts.id)).filter(Contracts.user_id == user_id)
+        contract_count = db.scalar(stmt_contracts)
+        has_any_contract = contract_count > 0
+        
+        logger.info(f'User {user_id} has {contract_count} contract(s)')
+        
+        # If user has any contract, return EMPTY list
+        if has_any_contract:
+            logger.info('User has contract - returning NO widgets (empty list)')
+            return {"widgets": []}
+        
+        # User has no contract - return random Card widgets
+        logger.info('User has no contract - returning random Card widgets')
+        stmt = (
+            select(Widget)
+            .filter(Widget.user_id == user_id)
+            .order_by(Widget.priority)
+        )
+        
+        widgets_orm = db.scalars(stmt).all()
         widgets_list = [widget.to_sdui_format() for widget in widgets_orm]
         
-        logger.info(f'API call: /widget/car-insurance {len(widgets_list)} widgets were loaded')
+        logger.info(f'API call: /widget/car-insurance returned {len(widgets_list)} widgets')
 
-        return {
-            "widgets": widgets_list
-        }
+        return {"widgets": widgets_list}
 
     except OperationalError as e:
         logger.error(f"Database query error: {e}", exc_info=True)
@@ -166,21 +315,21 @@ def get_car_insurance_widget(db: Session = Depends(get_db)):
         )
     
 @app.get("/widget/car-insurance/{widget_id}")
-def get_car_insurance_widget(widget_id: str, db: Session = Depends(get_db)):
+def get_car_insurance_widget_by_id(widget_id: str, db: Session = Depends(get_db)):
     """
-    Fetches specific car insurance widgets from the database using SQLAlchemy ORM.
+    Fetches specific car insurance widget from the database using SQLAlchemy ORM.
     """
-    logger.info('API call: /widget/car-insurance starts')
+    logger.info(f'API call: /widget/car-insurance/{widget_id} starts')
     
     try:
-        # 2. Query all 'default' widgets (the 10 car deals)
+        # Query specific widget
         stmt = select(Widget).filter(Widget.user_id == 123).filter(Widget.widget_id == widget_id).limit(1)
         widgets_orm = db.scalars(stmt).all()
         
-        # 3. Format the results into the SDUI response structure
+        # Format the results into the SDUI response structure
         widgets_list = [widget.to_sdui_format() for widget in widgets_orm]
         
-        logger.info(f'API call: /widget/car-insurance {len(widgets_list)} widgets were loaded')
+        logger.info(f'API call: /widget/car-insurance/{widget_id} {len(widgets_list)} widgets were loaded')
 
         return {
             "widgets": widgets_list
@@ -194,9 +343,10 @@ def get_car_insurance_widget(widget_id: str, db: Session = Depends(get_db)):
         )
 
 @app.post("/widget/car-insurance/contract")
-def post_car_insurance_contract(contract_data: ContractRequest, db: Session = Depends(get_db)):
+async def post_car_insurance_contract(contract_data: ContractRequest, db: Session = Depends(get_db)):
     """
     Endpoint to create a contract for a given user and widget.
+    PUBLISHES KAFKA EVENT after successful creation.
     """
     user_id = contract_data.user_id
     widget_id = contract_data.widget_id
@@ -210,11 +360,19 @@ def post_car_insurance_contract(contract_data: ContractRequest, db: Session = De
         db.commit()
         db.refresh(new_contract) # Get the newly created object with its ID
         
-        logger.info(f'API call completed successfully. Contract ID: {new_contract.id}')
+        logger.info(f'Contract created successfully. Contract ID: {new_contract.id}')
+        
+        # 🎯 PUBLISH KAFKA EVENT
+        await publish_contract_event(
+            event_type="contract_created",
+            user_id=user_id,
+            widget_id=widget_id,
+            contract_id=new_contract.id
+        )
 
         return {
             "message": "Contract created successfully",
-            "contract_id": new_contract.id, # Return the DB ID
+            "contract_id": new_contract.id,
             "user_id": user_id,
             "widget_id": widget_id
         }
@@ -227,11 +385,12 @@ def post_car_insurance_contract(contract_data: ContractRequest, db: Session = De
         )
 
 @app.delete("/widget/car-insurance/contract/{user_id}/{widget_id}")
-def delete_car_insurance_contract(user_id: int, widget_id: str, db: Session = Depends(get_db)):
+async def delete_car_insurance_contract(user_id: int, widget_id: str, db: Session = Depends(get_db)):
     """
     Endpoint to delete a contract for a given user and widget.
+    PUBLISHES KAFKA EVENT after successful deletion.
     """
-    logger.info(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} starts')
+    logger.info(f'API call: DELETE /widget/car-insurance/contract/{user_id}/{widget_id} starts')
     
     try:
         # Delete the contract entry
@@ -244,14 +403,22 @@ def delete_car_insurance_contract(user_id: int, widget_id: str, db: Session = De
         if contract:
             db.delete(contract)
             db.commit()
-            logger.info(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} deleted successfully')
+            logger.info(f'Contract deleted successfully for user {user_id}, widget {widget_id}')
+            
+            # 🎯 PUBLISH KAFKA EVENT
+            await publish_contract_event(
+                event_type="contract_deleted",
+                user_id=user_id,
+                widget_id=widget_id
+            )
+            
             return {
                 "message": "Contract deleted successfully",
                 "user_id": user_id,
                 "widget_id": widget_id
             }
         else:
-            logger.warning(f'API call: /widget/car-insurance/contract/{user_id}/{widget_id} not found')
+            logger.warning(f'Contract not found for user {user_id}, widget {widget_id}')
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Contract not found."
@@ -276,13 +443,22 @@ def get_car_insurance_contracts(user_id: int, db: Session = Depends(get_db)):
         stmt = select(Contracts).filter(Contracts.user_id == user_id)
         contracts_orm = db.scalars(stmt).first()
         
+        if not contracts_orm:
+            logger.info(f'No contracts found for user {user_id}')
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No contracts found."
+            )
+        
         stmt = select(Widget).filter(Widget.widget_id == contracts_orm.widget_id)
         widgets_orm = db.scalars(stmt).first()
 
-        logger.info(f'API call: /widget/car-insurance/contract/{user_id} retrieved widget sucessfully')
+        logger.info(f'Contract widget retrieved successfully for user {user_id}')
 
-        return widgets_orm
+        return widgets_orm.to_sdui_format()
 
+    except HTTPException:
+        raise
     except OperationalError as e:
         logger.error(f"Database query error: {e}", exc_info=True)
         raise HTTPException(

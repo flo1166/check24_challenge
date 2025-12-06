@@ -1,5 +1,21 @@
+# =========================================================================
+# docker-compose.yml - Complete Check24 Widget Platform with Kafka
+# =========================================================================
+# Services:
+# 1. Mock Product Service - Provides widget data
+# 2. Core Service (BFF) - Backend for Frontend
+# 3. Redis - Caching layer
+# 4. Kafka - Event streaming
+# 5. Zookeeper - Kafka coordination
+# 6. Product DB - PostgreSQL for product service
+# 7. Core DB - PostgreSQL for core service
+# 8. Adminer - Database management UI
+# 9. Kafka UI - Kafka monitoring (optional)
+
 services:
-  # 1. Mock Product Service
+  # ============================================================
+  # 1. MOCK PRODUCT SERVICE
+  # ============================================================
   mock-product-service:
     build: 
       context: ./mock-product-service
@@ -8,15 +24,31 @@ services:
     ports:
       - "8001:80"
     restart: always
-    environment: # <--- ADD ENVIRONMENT VARS
+    environment:
+      # Database connection
       DB_HOST: product-db
       DB_USER: product_user
       DB_PASSWORD: product_password
       DB_NAME: product_data
-    depends_on: # <--- ADD DEPENDENCY
-      - product-db
+      # Kafka connection
+      KAFKA_BROKER: kafka:9093
+    depends_on:
+      product-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - check24-network
 
-  # 2. Core Service (BFF)
+  # ============================================================
+  # 2. CORE SERVICE (BFF)
+  # ============================================================
   core-service:
     build: 
       context: ./core-service
@@ -24,108 +56,249 @@ services:
     container_name: core-service
     ports:
       - "8000:80"
+    restart: always
     environment:
-      MOCK_PRODUCT_SERVICE_URL: http://mock-product-service:80/
+      # Service URLs
+      MOCK_PRODUCT_SERVICE_URL: http://mock-product-service:80
+      
+      # Redis connection
       REDIS_HOST: redis
-      KAFKA_HOST: kafka:9093
-      DB_HOST: core-db # <--- UPDATED HOST
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      
+      # Kafka connection
+      KAFKA_BROKER: kafka:9093
+      
+      # Database connection (if needed in future)
+      DB_HOST: core-db
       DB_USER: core_user
       DB_PASSWORD: core_password
       DB_NAME: widget_platform_db
     volumes:
       - ./core-service/app:/app/app
     depends_on:
-      - mock-product-service
-      - redis
-      - core-db
+      mock-product-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      core-db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 10s
       timeout: 5s
-      retries: 1
+      retries: 3
+      start_period: 30s
+    networks:
+      - check24-network
 
-  # 3. Redis
+  # ============================================================
+  # 3. REDIS CACHE
+  # ============================================================
   redis:
     image: redis:7-alpine
     container_name: redis
     ports:
       - "6379:6379"
+    restart: always
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - check24-network
 
-  # --- Kafka Components for Asynchronous State ---
+  # ============================================================
+  # 4. ZOOKEEPER (Required for Kafka)
+  # ============================================================
   zookeeper:
-    image: 'confluentinc/cp-zookeeper:7.5.0'
+    image: confluentinc/cp-zookeeper:7.5.0
     hostname: zookeeper
     container_name: zookeeper
     ports:
       - "2181:2181"
+    restart: always
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+      ZOOKEEPER_INIT_LIMIT: 5
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - check24-network
 
+  # ============================================================
+  # 5. KAFKA BROKER
+  # ============================================================
   kafka:
-    image: 'confluentinc/cp-kafka:7.5.0'
+    image: confluentinc/cp-kafka:7.5.0
     hostname: kafka
     container_name: kafka
     ports:
-      - "9092:9092"
-      - "9093:9093"
+      - "9092:9092"  # External access (from host machine)
+      - "9093:9093"  # Internal access (from Docker containers)
+    restart: always
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      # Advertised listeners are crucial for Docker networking
-      # EXTERNAL listener for the host machine (9092)
+      
+      # Listener configuration
+      # PLAINTEXT: Internal Docker communication
+      # PLAINTEXT_HOST: External host communication
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9093,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      
+      # Topic configuration
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      
+      # Performance tuning
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168  # 7 days
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824  # 1GB
+      
+      # JVM settings
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M"
     depends_on:
-      - zookeeper
-  # 4. Product Service Database (DB for mock-product-service)
-  product-db:
-      image: postgres:16-alpine 
-      container_name: product-db
-      restart: always
-      ports:
-        - "5433:5432"
-      environment:
-        POSTGRES_USER: product_user
-        POSTGRES_PASSWORD: product_password
-        POSTGRES_DB: product_data
-      volumes:
-        - product_db_data:/var/lib/postgresql/data
-        - ./mock-product-service/db_init:/docker-entrypoint-initdb.d
+      zookeeper:
+        condition: service_healthy
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - check24-network
 
-  # 5. Core Service Database (DB for core-service)
+  # ============================================================
+  # 6. PRODUCT SERVICE DATABASE
+  # ============================================================
+  product-db:
+    image: postgres:16-alpine 
+    container_name: product-db
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: product_user
+      POSTGRES_PASSWORD: product_password
+      POSTGRES_DB: product_data
+    volumes:
+      - product_db_data:/var/lib/postgresql/data
+      - ./mock-product-service/db_init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U product_user -d product_data"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - check24-network
+
+  # ============================================================
+  # 7. CORE SERVICE DATABASE
+  # ============================================================
   core-db:
     image: postgres:16-alpine 
     container_name: core-db
     restart: always
     ports:
-      - "5434:5432" # Mapped to 5432 on the host
+      - "5434:5432"
     environment:
       POSTGRES_USER: core_user
       POSTGRES_PASSWORD: core_password
       POSTGRES_DB: widget_platform_db
     volumes:
       - core_db_data:/var/lib/postgresql/data
-      
-  # 6. Database Visualizer (Adminer)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U core_user -d widget_platform_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - check24-network
+
+  # ============================================================
+  # 8. ADMINER (Database Management UI)
+  # ============================================================
   adminer:
     image: adminer:latest
     container_name: adminer
     restart: always
     ports:
-      - "8081:8080" # Access Adminer via http://localhost:8080
-    depends_on: 
+      - "8081:8080"
+    depends_on:
       - product-db
       - core-db
+    networks:
+      - check24-network
 
+  # ============================================================
+  # 9. KAFKA UI (Optional - for monitoring and debugging)
+  # ============================================================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: check24-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9093
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    depends_on:
+      kafka:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
+    networks:
+      - check24-network
+
+# ============================================================
+# NETWORKS
+# ============================================================
+networks:
+  check24-network:
+    driver: bridge
+    name: check24-network
+
+# ============================================================
+# VOLUMES
+# ============================================================
 volumes:
   redis_data:
-  product_db_data: # <--- New volume for product-db
-  core_db_data:    # <--- New volume for core-db
+    driver: local
+  kafka_data:
+    driver: local
+  zookeeper_data:
+    driver: local
+  zookeeper_logs:
+    driver: local
+  product_db_data:
+    driver: local
+  core_db_data:
+    driver: local

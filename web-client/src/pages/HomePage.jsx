@@ -6,8 +6,10 @@ import CategoryNav from "../components/navigation/CategoryNav";
 import InsuranceCentre from '../components/layout/InsuranceCentre';
 
 export default function HomePage({ data, loading, error, onRetry }) {
-  const { updateNotification, notifications  } = useNotifications();
-  const [carouselIndex, setCarouselIndex] = useState(0);
+  const { updateNotification, notifications } = useNotifications();
+  // We use 1 for the step to allow partial views at the end. 
+  // The UI will still show 3, but the logic allows scrolling to the last widget.
+  const [carouselIndex, setCarouselIndex] = useState(0); 
   const [activeCategory, setActiveCategory] = useState(null);
   const [carouselHeight, setCarouselHeight] = useState('auto');
   const [selectedCarInsurance, setSelectedCarInsurance] = useState(null);
@@ -48,6 +50,23 @@ export default function HomePage({ data, loading, error, onRetry }) {
     console.log('Contract ID:', result.contract_id);
   };
 
+  /**
+   * Check if widgets contain valid data (not just fallback)
+   * Returns true if there are real widgets, false if empty or only fallback
+   */
+  const hasValidWidgets = () => {
+    if (!data?.widgets || data.widgets.length === 0) {
+      return false;
+    }
+
+    // Check if all widgets are fallback widgets
+    const onlyFallback = data.widgets.every(
+      widget => widget.widget_id === 'fallback_error_card'
+    );
+
+    return !onlyFallback;
+  };
+
   // Measure the tallest card and set carousel height
   useEffect(() => {
     if (!carouselRef.current) return;
@@ -73,6 +92,30 @@ export default function HomePage({ data, loading, error, onRetry }) {
 
     return () => resizeObserver.disconnect();
   }, [data?.widgets]);
+
+  // --- Start Navigation Helper Functions ---
+  const totalWidgets = data?.widgets?.length || 0;
+  const slidesPerView = 3;
+  
+  // Maximum index the carousel can start at.
+  // We allow it to be the index of the last widget (totalWidgets - 1) 
+  // so the last widget can be scrolled into view if the user clicks enough times.
+  const maxCarouselIndex = totalWidgets > 0 ? totalWidgets - 1 : 0;
+  
+  // Calculate the index for the next page, allowing it to land on the maxCarouselIndex.
+  const getNextIndex = () => {
+      return Math.min(maxCarouselIndex, carouselIndex + slidesPerView);
+  };
+
+  // Calculate the index for the previous page.
+  const getPrevIndex = () => {
+      return Math.max(0, carouselIndex - slidesPerView);
+  };
+
+  const totalPages = Math.ceil(totalWidgets / slidesPerView);
+  const currentPageIndex = Math.floor(carouselIndex / slidesPerView);
+
+  // --- End Navigation Helper Functions ---
 
   // Loading State
   if (loading) {
@@ -126,18 +169,19 @@ export default function HomePage({ data, loading, error, onRetry }) {
         />
       </section>
 
-      {/* Widgets Carousel */}
-      <section className="mb-16">
-        <h2 className="text-3xl font-bold text-c24-text-dark mb-8">Car Insurance Deals</h2>
-        
-        {data?.widgets && data.widgets.length > 0 ? (
+      {/* Widgets Carousel - Only show if valid widgets exist */}
+      {hasValidWidgets() && (
+        <section className="mb-16">
+          <h2 className="text-3xl font-bold text-c24-text-dark mb-8">Car Insurance Deals</h2>
+          
           <div className="relative">
             <div className="w-full">
               <div className="relative overflow-hidden" style={{ height: carouselHeight }} ref={carouselRef}>
                 <div 
                   className="flex transition-transform duration-300 ease-out items-stretch"
                   style={{ 
-                    transform: `translateX(calc(-${carouselIndex} * (100% / 3)))` 
+                    // Use the slidesPerView variable for cleaner logic
+                    transform: `translateX(calc(-${carouselIndex} * (100% / ${slidesPerView})))` 
                   }}
                 >
                   {data.widgets
@@ -158,16 +202,17 @@ export default function HomePage({ data, loading, error, onRetry }) {
                 </div>
               </div>
 
-              {/* Dot Indicators */}
+              {/* Dot Indicators - Show pages (groups of 3) */}
               <div className="flex justify-center gap-2 mt-6">
-                {data.widgets.map((_, index) => (
+                {Array.from({ length: totalPages }).map((_, pageIndex) => (
                   <button
-                    key={index}
-                    onClick={() => setCarouselIndex(index)}
+                    key={pageIndex}
+                    // Jump to the start of the page
+                    onClick={() => setCarouselIndex(pageIndex * slidesPerView)}
                     className={`w-4 h-2 rounded-full transition-colors ${
-                      index === carouselIndex ? 'bg-c24-primary-light' : 'bg-c24-text-muted'
+                      currentPageIndex === pageIndex ? 'bg-c24-primary-light' : 'bg-c24-text-muted'
                     }`}
-                    aria-label={`Go to slide ${index + 1}`}
+                    aria-label={`Go to page ${pageIndex + 1}`}
                   />
                 ))}
               </div>
@@ -175,10 +220,11 @@ export default function HomePage({ data, loading, error, onRetry }) {
 
             {/* Left Navigation Button */}
             <button
-              onClick={() => setCarouselIndex(Math.max(0, carouselIndex - 1))}
+              // Use the helper function
+              onClick={() => setCarouselIndex(getPrevIndex())}
               className="absolute left-[-30px] top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-c24-text-muted/10 transition-colors disabled:opacity-50 z-10"
               disabled={carouselIndex === 0}
-              aria-label="Previous slide"
+              aria-label="Previous 3 slides"
             >
               <svg className="w-6 h-6 text-c24-text-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -187,20 +233,21 @@ export default function HomePage({ data, loading, error, onRetry }) {
 
             {/* Right Navigation Button */}
             <button
-              onClick={() => setCarouselIndex(Math.min(data.widgets.length - 1, carouselIndex + 1))}
+              // Use the helper function
+              onClick={() => setCarouselIndex(getNextIndex())}
               className="absolute right-[-30px] top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-c24-text-muted/10 transition-colors disabled:opacity-50 z-10"
-              disabled={carouselIndex === data.widgets.length - 1}
-              aria-label="Next slide"
+              // Corrected logic: Disable when the carousel is already showing the last reachable index.
+              // This allows scrolling to the very last widget (index 42).
+              disabled={carouselIndex >= maxCarouselIndex} 
+              aria-label="Next 3 slides"
             >
               <svg className="w-6 h-6 text-c24-text-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
           </div>
-        ) : (
-          <p className="text-c24-text-muted">No widgets available at the moment.</p>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Footer CTA */}
       <section className="bg-gradient-to-r from-c24-primary-medium to-c24-primary-deep text-white text-center p-12 rounded-c24-lg">

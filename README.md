@@ -33,3 +33,8 @@ GET "sdui:home_page:v1"
 
 # check if server failed with data load from api
 docker-compose logs --tail 100 core-service
+
+# Reset kafka:
+docker exec kafka kafka-topics --delete \
+  --topic user.car.insurance.purchased \
+  --bootstrap-server localhost:9092

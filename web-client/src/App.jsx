@@ -29,6 +29,10 @@ export default function App() {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
+  const clearWidgets = () => {
+    setData(prev => prev ? {...prev, widgets: []} : null);
+  };
+
   /**
    * Fetch widget data from Core Service BFF
    * This happens on component mount and periodically via polling
@@ -97,6 +101,7 @@ export default function App() {
           loading={loading}
           error={error}
           onRetry={fetchWidgetData}
+          onClearWidgets={clearWidgets}
         />
       </MainLayout>
     </NotificationContext.Provider>

@@ -2,7 +2,6 @@ import json
 import logging
 import asyncio
 from aiokafka import AIOKafkaConsumer # Non-blocking Kafka client
-from app.core.cache import redis_client # Re-use the existing async redis client
 import os
 
 logger = logging.getLogger(__name__)
@@ -15,6 +14,7 @@ CACHE_KEY_PREFIX = "sdui:home_page:v1"
 async def consume_and_invalidate_cache():
     """
     Asynchronous Kafka Consumer run as a background task via FastAPI Lifespan.
+    Listens for contract creation/deletion events and invalidates the Redis cache.
     """
     consumer = AIOKafkaConsumer(
         KAFKA_TOPIC,
@@ -52,25 +52,67 @@ async def consume_and_invalidate_cache():
             event = message.value
             logger.info(f"📩 Received event: {event}")
             
-            # The key logic for targeted invalidation
-            # Note: The key for the SWR cache in home.py is HOME_PAGE_CACHE_KEY = "sdui:home_page:v1"
-            # Since the current SWR key is generic, you must either:
-            # A) Invalidate the generic key, or 
-            # B) Ensure your SWR key is user-specific, e.g., f"sdui:home_page:{user_id}:v1" 
+            # Extract event details
+            event_type = event.get("event_type")
+            user_id = event.get("user_id")
+            widget_id = event.get("widget_id")
             
-            # --- Assuming generic key invalidation for simplicity (Option A) ---
-            # If the user buys a product, the main home page content might change.
-            if message.topic == KAFKA_TOPIC:
-                deleted_count = await redis_client.delete(CACHE_KEY_PREFIX)
-                if deleted_count > 0:
-                    logger.info(f"🗑️ Successfully invalidated generic cache key: {CACHE_KEY_PREFIX}")
-                else:
-                    logger.warning(f"Cache key not found for deletion: {CACHE_KEY_PREFIX}")
+            # Handle different event types
+            if event_type in ["contract_created", "contract_deleted"]:
+                logger.info(f"Processing {event_type} for user {user_id}, widget {widget_id}")
+                
+                # STRATEGY: Invalidate the generic cache key
+                # This forces the next request to fetch fresh data from the product service
+                # which will now exclude the contracted widget from the carousel
+                
+                try:
+                    logger.info("Step 1: Importing redis_client...")
+                    # Import redis_client at runtime to ensure it's initialized
+                    from app.core.cache import redis_client
+                    logger.info(f"Step 2: redis_client imported, value: {redis_client}")
+                    
+                    # Check if redis_client is available
+                    if redis_client is None:
+                        logger.error("❌ Redis client is None - cache cannot be invalidated!")
+                        logger.error("This means init_redis_client() was not called or failed")
+                        continue
+                    
+                    logger.info(f"Step 3: Attempting to delete cache key: {CACHE_KEY_PREFIX}")
+                    deleted_count = await redis_client.delete(CACHE_KEY_PREFIX)
+                    logger.info(f"Step 4: Delete completed, count: {deleted_count}")
+                    
+                    if deleted_count > 0:
+                        logger.info(f"🗑️ Successfully invalidated cache key: {CACHE_KEY_PREFIX}")
+                        logger.info(f"   Reason: {event_type} for user {user_id}")
+                    else:
+                        logger.warning(f"⚠️ Cache key not found for deletion: {CACHE_KEY_PREFIX}")
+                        logger.info("This is normal if cache was already expired or empty")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Failed to invalidate cache: {type(e).__name__}: {e}", exc_info=True)
+            
+            else:
+                logger.warning(f"Unknown event type: {event_type}")
 
+    except Exception as e:
+        logger.error(f"Error in Kafka consumer loop: {e}", exc_info=True)
+    
     finally:
         # 3. Stop the Consumer when the FastAPI app shuts down
         await consumer.stop()
         logger.info("AIOKafka Consumer stopped.")
+
+# NOTE: This function is scheduled in core-service/app/main.py 
+# using the FastAPI Lifespan context manager.
+
+# NOTE: This function is scheduled in core-service/app/main.py 
+# using the FastAPI Lifespan context manager.
+
+# NOTE: This function is scheduled in core-service/app/main.py 
+# using the FastAPI Lifespan context manager.
+
+# NOTE: This function is scheduled in core-service/app/main.py 
+# using the FastAPI Lifespan context manager.
 
 # NOTE: This function needs to be scheduled in core-service/app/main.py 
 # using asyncio.create_task or similar, or better, via the FastAPI Lifespan.

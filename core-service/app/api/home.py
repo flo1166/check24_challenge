@@ -76,11 +76,8 @@ async def get_home_page_widgets(background_tasks: BackgroundTasks):
             widgets_data = [widgets_data] if widgets_data else []
         
         if not widgets_data:
-            logger.warning("get_home_page_widgets: No widgets returned")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="No widgets available from services"
-            )
+            logger.info("get_home_page_widgets: Empty widget list (user has contract)")
+            widgets_data = []
         
         # Create response
         widget_response = WidgetResponse(widgets=widgets_data)
