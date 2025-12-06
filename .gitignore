@@ -108,3 +108,10 @@ mock-product-service/app/core/logging_config.py
 core-service/app/core/logging_config.py
 core-service/logs/core-service.log
 mock-product-service/logs/mock-service.log
+web-client/src/contexts/info.txt
+web-client/src/hooks/info.txt
+web-client/src/pages/info.txt
+web-client/src/routes/info.txt
+web-client/src/services/info.txt
+web-client/src/styles/info.txt
+web-client/src/utils/info.txt
