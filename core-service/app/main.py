@@ -14,7 +14,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import home
 from app.core.cache import init_redis_client, close_redis_client
-from app.core.clients import product_service_client
+from app.core.clients import (
+    car_insurance_client,
+    health_insurance_client,
+    house_insurance_client,
+    banking_client
+)
 from app.workers.kafka_consumer import consume_and_invalidate_cache
 
 logger = logging.getLogger(__name__)
@@ -29,21 +34,29 @@ async def wait_for_services():
     
     logger.info("Waiting for dependent services...")
     
-    # Wait for mock-product-service
-    max_attempts = 15
-    for attempt in range(max_attempts):
-        try:
-            logger.info(f"Checking mock-product-service (attempt {attempt + 1}/{max_attempts})...")
-            response = await product_service_client.client.get("/health")
-            if response.status_code == 200:
-                logger.info("✓ Mock-product-service is ready!")
-                break
-        except Exception as e:
-            logger.warning(f"Mock-product-service not ready: {e}")
-            if attempt < max_attempts - 1:
-                await asyncio.sleep(2)
-            else:
-                logger.error("⚠ Mock-product-service still not ready after waiting")
+    # Wait for all product services to be ready
+    services = [
+        ("Car Insurance", car_insurance_client),
+        ("Health Insurance", health_insurance_client),
+        ("House Insurance", house_insurance_client),
+        ("Banking", banking_client)
+    ]
+    
+    for service_name, client in services:
+        max_attempts = 15
+        for attempt in range(max_attempts):
+            try:
+                logger.info(f"Checking {service_name} service (attempt {attempt + 1}/{max_attempts})...")
+                response = await client.client.get("/health")
+                if response.status_code == 200:
+                    logger.info(f"✓ {service_name} service is ready!")
+                    break
+            except Exception as e:
+                logger.warning(f"{service_name} service not ready: {e}")
+                if attempt < max_attempts - 1:
+                    await asyncio.sleep(2)
+                else:
+                    logger.error(f"⚠ {service_name} service still not ready after waiting")
     
     # Small additional delay for database connections to stabilize
     await asyncio.sleep(1)
@@ -104,10 +117,13 @@ async def lifespan(app: FastAPI):
             await asyncio.gather(kafka_consumer_task, return_exceptions=True)
             logger.info("✓ Kafka Consumer task stopped")
         
-        # 2. Close HTTPX Client (Circuit Breaker protected client)
-        logger.info("Closing Product Service HTTP client...")
-        await product_service_client.close()
-        logger.info("✓ Product Service HTTP client closed")
+        # 2. Close HTTPX Clients (Circuit Breaker protected clients)
+        logger.info("Closing Product Service HTTP clients...")
+        await car_insurance_client.close()
+        await health_insurance_client.close()
+        await house_insurance_client.close()
+        await banking_client.close()
+        logger.info("✓ Product Service HTTP clients closed")
         
         # 3. Close Async Redis Client
         logger.info("Closing Redis client...")
@@ -152,7 +168,3 @@ if __name__ == "__main__":
         port=8000,
         log_level="info"
     )
-'''
-//TODO: delete comment
-FastAPI app initialization, event handlers
-'''

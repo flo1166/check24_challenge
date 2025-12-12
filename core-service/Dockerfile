@@ -1,48 +1,26 @@
-# Multi-stage build for optimized image size
-FROM python:3.12-slim as builder
+FROM python:3.12-slim
 
-WORKDIR /build
+WORKDIR /app
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
     gcc \
+    postgresql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
-
-# Runtime stage
-FROM python:3.12-slim
-
-# Install runtime dependencies only
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy Python dependencies from builder
-COPY --from=builder /root/.local /root/.local
-
-# Set environment variables
-ENV PATH=/root/.local/bin:$PATH \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
-
-RUN mkdir -p /app/logs
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY ./app /app/app
 
-# Set working directory
-WORKDIR /app
+# Create logs directory
+RUN mkdir -p /app/logs
 
-HEALTHCHECK --interval=5s --timeout=3s --retries=5 \
-    CMD curl -f http://localhost/ || exit 1
+# Expose port 8000 (NOT 80)
+EXPOSE 8000
 
-# Expose port
-EXPOSE 80
-
-# Run the application
-WORKDIR /app
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "80"]
+# Run the application on port 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

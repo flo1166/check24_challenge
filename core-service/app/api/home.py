@@ -4,7 +4,7 @@ from typing import List
 from fastapi import APIRouter, status, HTTPException, BackgroundTasks
 
 from app.core.cache import get_with_swr
-from app.core.clients import fetch_car_insurance_widget_swr, fetch_user_contracts, product_service_breaker
+from app.core.clients import fetch_all_widgets_swr, fetch_user_contracts, close_all_clients
 from app.core.models import Widget, WidgetResponse
 from fastapi.responses import StreamingResponse
 
@@ -17,35 +17,24 @@ HOME_PAGE_CACHE_KEY = "sdui:home_page:v1"
 
 async def fetch_and_serialize_widgets():
     """
-    Fetch car insurance widgets and serialize them to the expected format.
+    Fetch widgets from ALL product services and serialize them.
     """
-    logger.info("fetch_and_serialize_widgets: Fetching car insurance widgets...")
+    logger.info("fetch_and_serialize_widgets: Fetching widgets from all services...")
     
     try:
-        # Fetch the widget data from the product service
-        result = await fetch_car_insurance_widget_swr()
+        # Fetch widgets from all services (aggregated)
+        widgets_data = await fetch_all_widgets_swr()
         
-        logger.debug(f"fetch_and_serialize_widgets: Raw result type: {type(result)}")
-        logger.debug(f"fetch_and_serialize_widgets: Raw result: {result}")
+        logger.debug(f"fetch_and_serialize_widgets: Received {len(widgets_data)} total widgets")
         
-        # Handle different response formats
-        if isinstance(result, dict):
-            # If result is a dict with 'widgets' key, extract it
-            if "widgets" in result:
-                widgets_data = result["widgets"]
-                logger.info(f"fetch_and_serialize_widgets: Extracted {len(widgets_data)} widgets from response")
-                return widgets_data
-            else:
-                logger.info("fetch_and_serialize_widgets: Single widget dict, wrapping in list")
-                return [result]
+        # Filter out any fallback widgets
+        valid_widgets = [
+            w for w in widgets_data 
+            if w.get("widget_id") != "fallback_error_card"
+        ]
         
-        elif isinstance(result, list):
-            logger.info(f"fetch_and_serialize_widgets: Received list of {len(result)} widgets")
-            return result
-        
-        else:
-            logger.error(f"fetch_and_serialize_widgets: Unexpected result type {type(result)}")
-            return []
+        logger.info(f"fetch_and_serialize_widgets: Returning {len(valid_widgets)} valid widgets")
+        return valid_widgets
     
     except Exception as e:
         logger.error(f"fetch_and_serialize_widgets: Error fetching widgets - {type(e).__name__}: {e}", exc_info=True)
@@ -55,10 +44,10 @@ async def fetch_and_serialize_widgets():
 @router.get("/home", response_model=WidgetResponse)
 async def get_home_page_widgets(background_tasks: BackgroundTasks):
     """
-    Aggregates data for the home page from multiple independent widget services.
-    Applies SWR logic to the Car Insurance widget for resilience and speed.
+    Aggregates data for the home page from all product services.
+    Applies SWR logic for resilience and speed.
     """
-    logger.info("get_home_page_widgets: Starting widget aggregation.")
+    logger.info("get_home_page_widgets: Starting widget aggregation from all services.")
 
     try:
         # Fetch widgets using SWR cache
@@ -77,7 +66,7 @@ async def get_home_page_widgets(background_tasks: BackgroundTasks):
             widgets_data = [widgets_data] if widgets_data else []
         
         if not widgets_data:
-            logger.info("get_home_page_widgets: Empty widget list (user has contract)")
+            logger.info("get_home_page_widgets: Empty widget list")
             widgets_data = []
         
         # Create response
@@ -97,25 +86,42 @@ async def get_home_page_widgets(background_tasks: BackgroundTasks):
             detail=f"Service error: {str(e)}"
         )
 
+
 @router.get("/user/{user_id}/contracts")
-async def get_user_contracts(user_id: int):
+async def get_user_contracts_endpoint(user_id: int):
     """
-    Fetches the user's car insurance contracts.
-    Returns the contract widget if the user has one, otherwise returns empty.
+    Fetches the user's contracts from all services.
+    Returns contracts grouped by service.
     """
-    logger.info(f"get_user_contracts: Fetching contracts for user {user_id}")
+    logger.info(f"get_user_contracts: Fetching contracts for user {user_id} from all services")
     
     try:
-        contract_data = await fetch_user_contracts(user_id)
+        # Fetch contracts from all services concurrently
+        results = await asyncio.gather(
+            fetch_user_contracts(user_id, "car"),
+            fetch_user_contracts(user_id, "health"),
+            fetch_user_contracts(user_id, "house"),
+            fetch_user_contracts(user_id, "banking"),
+            return_exceptions=True
+        )
         
-        if not contract_data:
-            logger.info(f"get_user_contracts: No contracts found for user {user_id}")
-            return {"has_contract": False, "contract": None}
+        contracts = {
+            "car_insurance": results[0] if not isinstance(results[0], Exception) else None,
+            "health_insurance": results[1] if not isinstance(results[1], Exception) else None,
+            "house_insurance": results[2] if not isinstance(results[2], Exception) else None,
+            "banking": results[3] if not isinstance(results[3], Exception) else None,
+        }
         
-        logger.info(f"get_user_contracts: Contract found for user {user_id}")
+        # Filter out None values
+        contracts = {k: v for k, v in contracts.items() if v}
+        
+        has_any_contract = len(contracts) > 0
+        
+        logger.info(f"get_user_contracts: Found {len(contracts)} contract(s) for user {user_id}")
+        
         return {
-            "has_contract": True,
-            "contract": contract_data
+            "has_contract": has_any_contract,
+            "contracts": contracts
         }
     
     except Exception as e:
@@ -124,7 +130,7 @@ async def get_user_contracts(user_id: int):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching contracts: {str(e)}"
         )
-    
+
 @router.get("/debug/circuit-breaker-status")
 async def get_circuit_breaker_status():
     """Debug endpoint to check circuit breaker status"""
@@ -156,49 +162,4 @@ async def stream_updates():
 async def health():
     logger.info("health: Health check called")
     return {"status": "healthy"}
-
-'''    
-@router.get(
-    "/home", 
-    response_model=WidgetResponse,
-    summary="Fetch the Server-Driven UI payload for the Home page with SWR caching."
-)
-async def get_home_page_data(background_tasks: BackgroundTasks):
-    """
-    The main API endpoint that orchestrates the data retrieval using SWR logic.
-    """
-    logger.info("get_home_page_data: Endpoint called")
-    
-    try:
-        logger.info("get_home_page_data: Calling get_with_swr...")
-        
-        # Use the centralized SWR cache function to retrieve data
-        data = await get_with_swr(
-            key=HOME_PAGE_CACHE_KEY,
-            fetch_function=fetch_data_and_serialize,
-            background_tasks=background_tasks
-        )
-        
-        logger.info(f"get_home_page_data: Data retrieved from cache/upstream: {data}")
-        
-        # If data is successfully returned (either fresh or stale), 
-        # return the validated model instance.
-        result = WidgetResponse(**data)
-        logger.info("get_home_page_data: Returning WidgetResponse")
-        return result
-        
-    except Exception as e:
-        logger.error(f"get_home_page_data: Exception caught - {type(e).__name__}: {e}", exc_info=True)
-        
-        # Return a standard 503 error for upstream failures to the client
-        raise HTTPException(
-            status_code=503, 
-            detail=f"Service temporarily unavailable: {str(e)}"
-        )
-
-@router.get("/health")
-async def health():
-    logger.info("health: Health check called")
-    return {"status": "healthy"}
-'''
 #//TODO is it the other way around, so that stuff is send to it and not asked for?

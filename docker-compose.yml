@@ -1,122 +1,15 @@
 # =========================================================================
-# docker-compose.yml - Complete Check24 Widget Platform with Kafka
+# docker-compose-simple.yml - Simplified version without strict health checks
 # =========================================================================
-# Services:
-# 1. Mock Product Service - Provides widget data
-# 2. Core Service (BFF) - Backend for Frontend
-# 3. Redis - Caching layer
-# 4. Kafka - Event streaming
-# 5. Zookeeper - Kafka coordination
-# 6. Product DB - PostgreSQL for product service
-# 7. Core DB - PostgreSQL for core service
-# 8. Adminer - Database management UI
-# 9. Kafka UI - Kafka monitoring (optional)
+# Use this if health checks keep failing. Services will start with delays
+# instead of waiting for health confirmation.
+# =========================================================================
 
 services:
   # ============================================================
-  # 1. MOCK PRODUCT SERVICE
+  # INFRASTRUCTURE LAYER
   # ============================================================
-  mock-product-service:
-    build: 
-      context: ./mock-product-service
-      dockerfile: Dockerfile
-    container_name: mock-product-service
-    ports:
-      - "8001:80"
-    restart: always
-    environment:
-      # Database connection
-      DB_HOST: product-db
-      DB_USER: product_user
-      DB_PASSWORD: product_password
-      DB_NAME: product_data
-      # Kafka connection
-      KAFKA_BROKER: kafka:9093
-    depends_on:
-      product-db:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    networks:
-      - check24-network
-
-  # ============================================================
-  # 2. CORE SERVICE (BFF)
-  # ============================================================
-  core-service:
-    build: 
-      context: ./core-service
-      dockerfile: Dockerfile
-    container_name: core-service
-    ports:
-      - "8000:80"
-    restart: always
-    environment:
-      # Service URLs
-      MOCK_PRODUCT_SERVICE_URL: http://mock-product-service:80
-      
-      # Redis connection
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 0
-      
-      # Kafka connection
-      KAFKA_BROKER: kafka:9093
-      
-      # Database connection (if needed in future)
-      DB_HOST: core-db
-      DB_USER: core_user
-      DB_PASSWORD: core_password
-      DB_NAME: widget_platform_db
-    volumes:
-      - ./core-service/app:/app/app
-    depends_on:
-      mock-product-service:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      core-db:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-    networks:
-      - check24-network
-
-  # ============================================================
-  # 3. REDIS CACHE
-  # ============================================================
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    ports:
-      - "6379:6379"
-    restart: always
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    networks:
-      - check24-network
-
-  # ============================================================
-  # 4. ZOOKEEPER (Required for Kafka)
-  # ============================================================
+  
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     hostname: zookeeper
@@ -127,123 +20,281 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_SYNC_LIMIT: 2
-      ZOOKEEPER_INIT_LIMIT: 5
+      ZOOKEEPER_4LW_COMMANDS_WHITELIST: "srvr,mntr,ruok,stat"
     volumes:
       - zookeeper_data:/var/lib/zookeeper/data
       - zookeeper_logs:/var/lib/zookeeper/log
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "2181"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
     networks:
       - check24-network
 
-  # ============================================================
-  # 5. KAFKA BROKER
-  # ============================================================
   kafka:
     image: confluentinc/cp-kafka:7.5.0
     hostname: kafka
     container_name: kafka
     ports:
-      - "9092:9092"  # External access (from host machine)
-      - "9093:9093"  # Internal access (from Docker containers)
+      - "9092:9092"
+      - "9093:9093"
     restart: always
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
-      
-      # Listener configuration
-      # PLAINTEXT: Internal Docker communication
-      # PLAINTEXT_HOST: External host communication
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9093,PLAINTEXT_HOST://localhost:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      
-      # Topic configuration
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      
-      # Performance tuning
       KAFKA_NUM_PARTITIONS: 3
       KAFKA_DEFAULT_REPLICATION_FACTOR: 1
-      KAFKA_LOG_RETENTION_HOURS: 168  # 7 days
-      KAFKA_LOG_SEGMENT_BYTES: 1073741824  # 1GB
-      
-      # JVM settings
-      KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_HEAP_OPTS: "-Xmx1G -Xms512M"
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 18000
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 18000
     depends_on:
-      zookeeper:
-        condition: service_healthy
+      - zookeeper
     volumes:
       - kafka_data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
+    networks:
+      - check24-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
     networks:
       - check24-network
 
   # ============================================================
-  # 6. PRODUCT SERVICE DATABASE
+  # DATABASES
   # ============================================================
-  product-db:
+  
+  product-db-car:
     image: postgres:16-alpine 
-    container_name: product-db
+    container_name: product-db-car
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: product_user
+      POSTGRES_PASSWORD: product_password
+      POSTGRES_DB: car_insurance_db
+    volumes:
+      - car_db_data:/var/lib/postgresql/data
+      - ./mock-product-service/db_init:/docker-entrypoint-initdb.d
+    networks:
+      - check24-network
+
+  product-db-health:
+    image: postgres:16-alpine 
+    container_name: product-db-health
     restart: always
     ports:
       - "5433:5432"
     environment:
       POSTGRES_USER: product_user
       POSTGRES_PASSWORD: product_password
-      POSTGRES_DB: product_data
+      POSTGRES_DB: health_insurance_db
     volumes:
-      - product_db_data:/var/lib/postgresql/data
-      - ./mock-product-service/db_init:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U product_user -d product_data"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      - health_db_data:/var/lib/postgresql/data
+      - ./health-insurance-service/db_init:/docker-entrypoint-initdb.d
     networks:
       - check24-network
 
-  # ============================================================
-  # 7. CORE SERVICE DATABASE
-  # ============================================================
+  product-db-house:
+    image: postgres:16-alpine 
+    container_name: product-db-house
+    restart: always
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: product_user
+      POSTGRES_PASSWORD: product_password
+      POSTGRES_DB: house_insurance_db
+    volumes:
+      - house_db_data:/var/lib/postgresql/data
+      - ./house-insurance-service/db_init:/docker-entrypoint-initdb.d
+    networks:
+      - check24-network
+
+  product-db-banking:
+    image: postgres:16-alpine 
+    container_name: product-db-banking
+    restart: always
+    ports:
+      - "5435:5432"
+    environment:
+      POSTGRES_USER: product_user
+      POSTGRES_PASSWORD: product_password
+      POSTGRES_DB: banking_db
+    volumes:
+      - banking_db_data:/var/lib/postgresql/data
+      - ./banking-service/db_init:/docker-entrypoint-initdb.d
+    networks:
+      - check24-network
+
   core-db:
     image: postgres:16-alpine 
     container_name: core-db
     restart: always
     ports:
-      - "5434:5432"
+      - "5436:5432"
     environment:
       POSTGRES_USER: core_user
       POSTGRES_PASSWORD: core_password
       POSTGRES_DB: widget_platform_db
     volumes:
       - core_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U core_user -d widget_platform_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
     networks:
       - check24-network
 
   # ============================================================
-  # 8. ADMINER (Database Management UI)
+  # PRODUCT SERVICES
   # ============================================================
+  
+  mock-product-service:
+    build: 
+      context: ./mock-product-service
+      dockerfile: Dockerfile
+    container_name: mock-product-service
+    ports:
+      - "8001:8000"
+    restart: always
+    environment:
+      DB_HOST: product-db-car
+      DB_USER: product_user
+      DB_PASSWORD: product_password
+      DB_NAME: car_insurance_db
+      KAFKA_BROKER: kafka:9093
+    depends_on:
+      - product-db-car
+      - kafka
+    volumes:
+      - ./mock-product-service/app:/app/app
+      - ./mock-product-service/logs:/app/logs
+    networks:
+      - check24-network
+
+  health-insurance-service:
+    build: 
+      context: ./health-insurance-service
+      dockerfile: Dockerfile
+    container_name: health-insurance-service
+    ports:
+      - "8002:8000"
+    restart: always
+    environment:
+      DB_HOST: product-db-health
+      DB_USER: product_user
+      DB_PASSWORD: product_password
+      DB_NAME: health_insurance_db
+      KAFKA_BROKER: kafka:9093
+    depends_on:
+      - product-db-health
+      - kafka
+    volumes:
+      - ./health-insurance-service/app:/app/app
+      - ./health-insurance-service/logs:/app/logs
+    networks:
+      - check24-network
+
+  house-insurance-service:
+    build: 
+      context: ./house-insurance-service
+      dockerfile: Dockerfile
+    container_name: house-insurance-service
+    ports:
+      - "8003:8000"
+    restart: always
+    environment:
+      DB_HOST: product-db-house
+      DB_USER: product_user
+      DB_PASSWORD: product_password
+      DB_NAME: house_insurance_db
+      KAFKA_BROKER: kafka:9093
+    depends_on:
+      - product-db-house
+      - kafka
+    volumes:
+      - ./house-insurance-service/app:/app/app
+      - ./house-insurance-service/logs:/app/logs
+    networks:
+      - check24-network
+
+  banking-service:
+    build: 
+      context: ./banking-service
+      dockerfile: Dockerfile
+    container_name: banking-service
+    ports:
+      - "8004:8000"
+    restart: always
+    environment:
+      DB_HOST: product-db-banking
+      DB_USER: product_user
+      DB_PASSWORD: product_password
+      DB_NAME: banking_db
+      KAFKA_BROKER: kafka:9093
+    depends_on:
+      - product-db-banking
+      - kafka
+    volumes:
+      - ./banking-service/app:/app/app
+      - ./banking-service/logs:/app/logs
+    networks:
+      - check24-network
+
+  # ============================================================
+  # CORE SERVICE
+  # ============================================================
+  
+  core-service:
+    build: 
+      context: ./core-service
+      dockerfile: Dockerfile
+    container_name: core-service
+    ports:
+      - "8000:8000"
+    restart: always
+    environment:
+      CAR_INSURANCE_SERVICE_URL: http://mock-product-service:8000
+      HEALTH_INSURANCE_SERVICE_URL: http://health-insurance-service:8000
+      HOUSE_INSURANCE_SERVICE_URL: http://house-insurance-service:8000
+      BANKING_SERVICE_URL: http://banking-service:8000
+      MOCK_PRODUCT_SERVICE_URL: http://mock-product-service:8000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      KAFKA_BROKER: kafka:9093
+      DB_HOST: core-db
+      DB_USER: core_user
+      DB_PASSWORD: core_password
+      DB_NAME: widget_platform_db
+    volumes:
+      - ./core-service/app:/app/app
+      - ./core-service/logs:/app/logs
+    depends_on:
+      - mock-product-service
+      - health-insurance-service
+      - house-insurance-service
+      - banking-service
+      - redis
+      - kafka
+      - core-db
+    networks:
+      - check24-network
+
+  # ============================================================
+  # ADMIN TOOLS
+  # ============================================================
+  
   adminer:
     image: adminer:latest
     container_name: adminer
@@ -251,14 +302,10 @@ services:
     ports:
       - "8081:8080"
     depends_on:
-      - product-db
-      - core-db
+      - product-db-car
     networks:
       - check24-network
 
-  # ============================================================
-  # 9. KAFKA UI (Optional - for monitoring and debugging)
-  # ============================================================
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
@@ -271,34 +318,22 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
       DYNAMIC_CONFIG_ENABLED: 'true'
     depends_on:
-      kafka:
-        condition: service_healthy
-      zookeeper:
-        condition: service_healthy
+      - kafka
     networks:
       - check24-network
 
-# ============================================================
-# NETWORKS
-# ============================================================
 networks:
   check24-network:
     driver: bridge
     name: check24-network
 
-# ============================================================
-# VOLUMES
-# ============================================================
 volumes:
   redis_data:
-    driver: local
   kafka_data:
-    driver: local
   zookeeper_data:
-    driver: local
   zookeeper_logs:
-    driver: local
-  product_db_data:
-    driver: local
+  car_db_data:
+  health_db_data:
+  house_db_data:
+  banking_db_data:
   core_db_data:
-    driver: local

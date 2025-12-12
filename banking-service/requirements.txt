@@ -1,0 +1,10 @@
+pybreaker==1.4.1
+httpx==0.28.1
+uvicorn==0.38.0
+fastapi==0.121.3
+redis==5.0.1
+sqlalchemy==2.0.44
+kafka-python==2.3.0
+aiokafka==0.12.0
+psycopg2-binary==2.9.10
+python-json-logger==4.0.0
