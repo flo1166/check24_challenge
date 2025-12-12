@@ -3,18 +3,77 @@
  * Card.jsx - Card Widget Component
  * =========================================================================
  * Displays a single product/deal card with image, title, description,
- * and call-to-action button. Fully styled according to Check24 design.
+ * price, rating, and call-to-action button.
  */
 
 import React, { useState } from 'react';
-import { Heart, ShoppingCart } from 'lucide-react';
+import { Heart, ShoppingCart, Star } from 'lucide-react'; 
 import { useNotifications } from '../../contexts/NotificationContext';
 import { getImageUrl } from '../../utils/imageLoader';
 
+// --- PriceLabel Component ---
+export function PriceLabel({ price, currency, frequency }) {
+  if (!price) return null;
+
+  // Format price with European formatting: 1.234,56
+  // 1. Convert to number and fix to 2 decimals
+  const numericPrice = parseFloat(price);
+  
+  // 2. Split into integer and decimal parts
+  const [integerPart, decimalPart] = numericPrice.toFixed(2).split('.');
+  
+  // 3. Add thousands separator (point) to integer part
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  
+  // 4. Combine with comma as decimal separator
+  const formattedPrice = `${formattedInteger},${decimalPart} ${currency || '€'}`;
+
+  return (
+    <div className="flex items-baseline mb-3">
+      <span className="text-xl font-extrabold text-c24-text-dark mr-1">
+        {formattedPrice}
+      </span>
+      {frequency && (
+        <span className="text-c24-sm text-c24-text-muted">
+          /{frequency}
+        </span>
+      )}
+    </div>
+  );
+}
+
+
+// --- UPDATED COMPONENT: RatingLabel (Focus on numerical value and single star icon) ---
+export function RatingLabel({ rating }) {
+  if (rating === null || rating === undefined) return null;
+
+  const ratingValue = parseFloat(rating);
+  const safeRating = Math.max(0, Math.min(5, ratingValue));
+  
+  // Format the numerical rating to one decimal place (e.g., 1.8)
+  const formattedRating = safeRating.toFixed(1);
+
+  // Use semi-transparent dark background for visibility on any image
+  return (
+    <div className="bg-black/50 rounded-full py-1 px-3 flex items-center shadow-md">
+      <div className="flex items-center gap-1">
+        {/* The numerical rating is prominent and white */}
+        <span className="text-sm font-bold text-white">
+          {formattedRating}
+        </span>
+        {/* A single yellow star icon for context */}
+        <Star 
+          size={20} 
+          className="text-c24-alert-yellow fill-c24-highlight-yellow" 
+          fill={'currentColor'}
+        />
+      </div>
+    </div>
+  );
+}
+
+
 function ContentList({ content }) {
-  // 1. Split the content by the period (.)
-  // 2. Filter out empty strings
-  // 3. Trim whitespace from each item
   const listItems = content
     .split('.')
     .filter(item => item.trim() !== '')
@@ -23,13 +82,10 @@ function ContentList({ content }) {
   return (
     <ul className="text-c24-sm text-c24-text-muted leading-relaxed">
       {listItems.map((item, index) => (
-        // Using a <li> element for proper list semantics
         <li key={index} className="flex items-start mb-2">
-          {/* Plain Unicode Checkmark */}
           <span className="mr-2 flex-shrink-0">
             ✓
           </span>
-          {/* The list item content */}
           <span>
             {item}
           </span>
@@ -48,24 +104,23 @@ export default function Card({ data, widgetData, onAddToCart }) {
   const title = data?.title || 'Untitled';
   const subtitle = data?.subtitle || '';
   const content = data?.content || 'No description available';
-  const imageUrl = data?.image_url || '';
   const ctaLink = data?.cta_link || '#';
+  const price = data?.pricing?.price || null;
+  const frequency = data?.pricing?.frequency || null;
+  const currency = data?.pricing?.currency || null;
+  const rating = data?.rating?.score || null; 
   const resolvedImageUrl = getImageUrl(data?.image_url || null);
 
   /**
    * Handle adding item to cart
-   * Updates global notification count AND passes widget data to parent
    */
   const handleAddToCart = () => {
-    // Update cart count notification
     updateNotification('cart', 1);
     
-    // Pass the entire widget data to parent (HomePage)
     if (onAddToCart && widgetData) {
       onAddToCart(widgetData);
     }
     
-    // Show "Added!" feedback
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000); // Reset after 2s
   };
@@ -81,7 +136,8 @@ export default function Card({ data, widgetData, onAddToCart }) {
 
   return (
     <div className="bg-white rounded-c24-md shadow-c24-md hover:shadow-c24-lg transition-all duration-200 overflow-hidden border border-c24-border-gray hover:border-c24-primary-medium hover:-translate-y-0.5 h-full flex flex-col">
-      {/* Image Container: Added flex justify-center items-center for dual centering */}
+      
+      {/* 1. Image Container (Relative Parent) */}
       <div className="relative h-40 overflow-hidden bg-c24-light-gray group flex-shrink-0 flex justify-center items-center">
         {resolvedImageUrl ? (
           <img
@@ -99,7 +155,12 @@ export default function Card({ data, widgetData, onAddToCart }) {
           </div>
         )}
 
-        {/* Overlay Actions */}
+        {/* --- RATING LABEL: Absolute position in bottom-left corner --- */}
+        <div className="absolute top-2 right-2 z-10">
+          <RatingLabel rating={rating} />
+        </div>
+
+        {/* Overlay Actions (Favorite Button) */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end justify-end p-3">
           <button
             onClick={handleFavorite}
@@ -115,22 +176,28 @@ export default function Card({ data, widgetData, onAddToCart }) {
         </div>
       </div>
 
-      {/* Content */}
+      {/* 2. Content Section */}
       <div className="p-4 flex flex-col flex-1">
-        {/* New wrapper for Title/Subtitle/Description, consumes vertical space */}
         <div className="flex flex-col flex-1 mb-4">
-          {/* Title */}
+          
+          {/* Title and Subtitle */}
           <h3 className="text-base font-bold text-c24-text-dark mb-2 line-clamp-2">{title}</h3>
-
-          {/* Subtitle */}
           {subtitle && <p className="text-xs font-semibold text-c24-primary-medium mb-2">{subtitle}</p>}
-
-          {/* Description */}
-          {/* Removed mb-4 here and added it to the parent wrapper instead */}
+          
+          {/* --- PRICE LABEL: Displayed in the content body --- */}
+          <div className="flex items-center justify-start mt-1 mb-2">
+            <PriceLabel 
+              price={price} 
+              currency={currency} 
+              frequency={frequency} 
+            />
+          </div>
+          
+          {/* Description List */}
           <ContentList content={content} />
         </div>
 
-        {/* Footer with Button is now anchored to the bottom using mt-auto */}
+        {/* 3. Footer/CTA */}
         <div className="mt-auto">
           <button
             onClick={handleAddToCart}

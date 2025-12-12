@@ -1,15 +1,29 @@
-const images = import.meta.glob('../assets/images/companies/*.svg', { eager: true });
+// Import both company logos and car images
+const companyImages = import.meta.glob('../assets/images/companies/*.svg', { eager: true });
+const carImages = import.meta.glob('../assets/images/cars/*.*', { eager: true });
 
 export const getImageUrl = (imagePath) => {
-  // 1. **THE FIX:** Check if imagePath is a valid string.
+  // 1. Check if imagePath is a valid string
   if (typeof imagePath !== 'string' || !imagePath.length) {
-    // Return null or a default placeholder URL if the path is invalid.
     return null; 
   }
   
-  // 2. Only run the string methods if imagePath is confirmed to be a string.
+  // 2. Extract filename from path
   const filename = imagePath.split('/').pop();
-  const key = `../assets/images/companies/${filename}`;
   
-  return images[key]?.default || null;
+  // 3. Try company images first
+  const companyKey = `../assets/images/companies/${filename}`;
+  if (companyImages[companyKey]) {
+    return companyImages[companyKey].default;
+  }
+  
+  // 4. Try car images
+  const carKey = `../assets/images/cars/${filename}`;
+  if (carImages[carKey]) {
+    return carImages[carKey].default;
+  }
+  
+  // 5. Return null if not found
+  console.warn(`Image not found: ${imagePath}`);
+  return null;
 };

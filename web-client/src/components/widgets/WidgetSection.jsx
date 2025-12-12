@@ -22,6 +22,7 @@ import { useMemo, useState } from 'react';
 import ProductCarousel from './ProductCarousel';
 import InfoBoxGrid from './InfoBoxGrid';
 import SectionHeader from './SectionHeader';
+import ProductGrid from './ProductGrid';
 
 export default function WidgetSection({ 
   widgets, 
@@ -45,7 +46,7 @@ export default function WidgetSection({
     if (!widgets || widgets.length === 0) return {};
 
     return widgets.reduce((groups, widget) => {
-      const type = widget.component_type || 'Card'; // Default to Card
+      const type = widget.component_type || 'Card'; 
       if (!groups[type]) {
         groups[type] = [];
       }
@@ -102,6 +103,12 @@ export default function WidgetSection({
             <InfoBoxGrid 
               widgets={groupedWidgets.InfoBox}
               title={groupedWidgets.Card ? "More Options" : undefined}
+            />
+          )}
+          {groupedWidgets.ProductGrid && groupedWidgets.ProductGrid.length > 0 && (
+            <ProductGrid 
+                widgetData={groupedWidgets.ProductGrid[0]} 
+                onAddToCart={onAddToCart}
             />
           )}
 

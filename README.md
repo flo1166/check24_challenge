@@ -38,3 +38,6 @@ docker-compose logs --tail 100 core-service
 docker exec kafka kafka-topics --delete \
   --topic user.car.insurance.purchased \
   --bootstrap-server localhost:9092
+
+# Reset Redis:
+docker exec -it redis redis-cli FLUSHDB   

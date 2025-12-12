@@ -10,6 +10,7 @@ import React, { Suspense } from 'react';
 import Card from './Card';
 import InfoBox from './InfoBox';
 import SectionHeader from './SectionHeader';
+import ProductGrid from './ProductGrid';
 import Loader from '../common/Loader';
 
 /**
@@ -21,7 +22,7 @@ const COMPONENT_MAP = {
   InfoBox,
   SectionHeader,
   // Hero: Hero,
-  // ProductGrid: ProductGrid,
+  ProductGrid,
   // Carousel: Carousel,
   // Banner: Banner,
   // etc.

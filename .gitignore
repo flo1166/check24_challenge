@@ -115,3 +115,7 @@ web-client/src/routes/info.txt
 web-client/src/services/info.txt
 web-client/src/styles/info.txt
 web-client/src/utils/info.txt
+diagnose.py
+reset_to_show_widgets.sh
+test_kafka_flow.py
+core-service/logs/core-service.log.1
