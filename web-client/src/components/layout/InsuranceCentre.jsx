@@ -5,70 +5,58 @@
  * Interactive insurance category showcase with flip-card animations.
  * Shows icon tiles (Car, Health, House, Money) that unlock on purchase
  * and flip to reveal contract details on hover.
- * 
- * Design:
- * - Car Insurance unlocks when user has a contract OR adds to cart
- * - Locked tiles: grey icons, grey background
- * - Unlocked tiles: blue icons, white background
- * - Back of card shows actual contract details
+ * * Reworked to handle ALL contract types (car, health, house, money)
+ * and update state based on the grouped API response.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Car, Heart, Home, PiggyBank } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { getImageUrl } from '../../utils/imageLoader';
 import '../../styles/InsuranceCentre.css';
 import '../../styles/components.css';
 
-export default function InsuranceCentre({ cartCount = 0, selectedCarInsurance = null }) {
-  // Insurance categories with metadata
-  const categories = [
-    {
-      id: 'car',
-      label: 'Car Insurance',
-      icon: 'car',
-      description: 'View your car insurance contracts',
-    },
-    {
-      id: 'health',
-      label: 'Health Insurance',
-      icon: 'health',
-      description: 'View your health insurance contracts',
-    },
-    {
-      id: 'house',
-      label: 'House Insurance',
-      icon: 'house',
-      description: 'View your house insurance contracts',
-    },
-    {
-      id: 'money',
-      label: 'Money & Banking',
-      icon: 'money',
-      description: 'View your banking & investment products',
-    },
-  ];
+// --- Configuration ---
+// Map category IDs used in the component to the API service keys used by the backend
+const CATEGORY_MAP = {
+  car: 'car_insurance',
+  health: 'health_insurance',
+  house: 'house_insurance',
+  money: 'banking', // Assuming 'money' category uses the 'banking' service key
+};
 
+const categories = [
+  { id: 'car', label: 'Car Insurance', icon: 'car', description: 'View your car insurance contracts' },
+  { id: 'health', label: 'Health Insurance', icon: 'health', description: 'View your health insurance contracts' },
+  { id: 'house', label: 'House Insurance', icon: 'house', description: 'View your house insurance contracts' },
+  { id: 'money', label: 'Money & Banking', icon: 'money', description: 'View your banking & investment products' },
+];
+
+// --- Component ---
+
+export default function InsuranceCentre({ 
+  cartCount = 0, 
+  selectedCarInsurance = null, 
+  selectedHealthInsurance = null, 
+  selectedHouseInsurance = null, 
+  selectedBankingProduct = null 
+}) {
   // State management
   const [unlockedCategories, setUnlockedCategories] = useState({});
   const [flippedCards, setFlippedCards] = useState({});
-  const [contracts, setContracts] = useState({});
+  // contracts state will now store all fetched contracts, keyed by category ID ('car', 'health', etc.)
+  const [contracts, setContracts] = useState({}); 
   const [loading, setLoading] = useState(true);
   const { notifications } = useNotifications();
 
-  // Fetch user contracts on mount
-  useEffect(() => {
-    fetchUserContracts();
-  }, []);
 
-  async function fetchUserContracts() {
+  // 1. Core Logic: Fetch and Process ALL Contracts
+  const fetchUserContracts = useCallback(async () => {
     try {
       setLoading(true);
       const userId = 123; // TODO: Get from auth context
       
       console.log('=== FETCHING CONTRACTS ===');
-      console.log('User ID:', userId);
-      
       const response = await fetch(`http://localhost:8000/user/${userId}/contracts`);
       
       if (!response.ok) {
@@ -78,74 +66,81 @@ export default function InsuranceCentre({ cartCount = 0, selectedCarInsurance = 
       }
 
       const jsonData = await response.json();
-      console.log('=== API RESPONSE ===');
       console.log('Full API response:', JSON.stringify(jsonData, null, 2));
-      console.log('Response is array?:', Array.isArray(jsonData));
-      
-      // Handle both array and object responses
-      let contractData = null;
-      
-      if (Array.isArray(jsonData)) {
-        // Response is an array - take the first contract
-        console.log('Response is array, taking first element');
-        contractData = jsonData.length > 0 ? jsonData[0] : null;
-      } else if (jsonData.has_contract && jsonData.contract) {
-        // Response is the wrapped format: {has_contract: true, contract: {...}}
-        console.log('Response has has_contract wrapper');
-        contractData = jsonData.contract;
-      } else if (jsonData.widget_id) {
-        // Response is directly a contract object
-        console.log('Response is direct contract object');
-        contractData = jsonData;
-      }
-      
-      console.log('Contract data to store:', contractData);
 
-      // If we have contract data, store it and unlock the category
-      if (contractData) {
-        console.log('Storing contract in state...');
-        console.log('Contract has data.title?', contractData?.data?.title);
+      if (jsonData.has_contract && jsonData.contracts) {
         
-        setContracts({
-          car: contractData,
+        const newContracts = {};
+        const newUnlockedStatus = {};
+
+        // Iterate through the local categories definition
+        categories.forEach(category => {
+          const serviceKey = CATEGORY_MAP[category.id];
+          const contractData = jsonData.contracts[serviceKey];
+
+          if (contractData) {
+            newContracts[category.id] = contractData;
+            newUnlockedStatus[category.id] = true;
+          }
         });
-        
+
+        // Update states once with the consolidated data
+        setContracts(newContracts);
         setUnlockedCategories(prev => ({
-          ...prev,
-          car: true,
+          ...prev, 
+          ...newUnlockedStatus
         }));
         
-        console.log('Contract stored and car unlocked');
+        console.log('Contracts fetched and stored:', Object.keys(newContracts));
+
       } else {
-        console.log('No contract found');
+        console.log('No contracts found in API response.');
       }
-      console.log('===================');
       
       setLoading(false);
     } catch (error) {
       console.error('Failed to fetch contracts:', error);
       setLoading(false);
     }
-  }
+  }, []);
 
-  // When user adds insurance to cart from carousel, store it and unlock
+  // Fetch contracts on mount
   useEffect(() => {
-    if (selectedCarInsurance) {
-      console.log('Selected car insurance from cart:', selectedCarInsurance);
-      
-      setContracts(prev => ({
-        ...prev,
-        car: selectedCarInsurance,
-      }));
-      
-      setUnlockedCategories(prev => ({
-        ...prev,
-        car: true,
-      }));
-    }
-  }, [selectedCarInsurance]);
+    fetchUserContracts();
+  }, [fetchUserContracts]);
 
-  // Also unlock car category when items are added to cart
+
+  // 2. Handling external updates (Cart/Selected Products)
+  // This is now separated for clarity and to handle all categories passed as props
+  
+  // Array of props and their corresponding category IDs
+  const externalProducts = [
+    { prop: selectedCarInsurance, id: 'car' },
+    { prop: selectedHealthInsurance, id: 'health' },
+    { prop: selectedHouseInsurance, id: 'house' },
+    { prop: selectedBankingProduct, id: 'money' },
+  ];
+
+  useEffect(() => {
+    const updatedContracts = {};
+    const updatedUnlocked = {};
+
+    externalProducts.forEach(item => {
+      if (item.prop) {
+        updatedContracts[item.id] = item.prop;
+        updatedUnlocked[item.id] = true;
+        console.log(`External product found for: ${item.id}`);
+      }
+    });
+
+    if (Object.keys(updatedContracts).length > 0) {
+      setContracts(prev => ({ ...prev, ...updatedContracts }));
+      setUnlockedCategories(prev => ({ ...prev, ...updatedUnlocked }));
+    }
+  }, [selectedCarInsurance, selectedHealthInsurance, selectedHouseInsurance, selectedBankingProduct]);
+
+
+  // Unlock car category when cart has items (Original specific logic)
   useEffect(() => {
     if (cartCount > 0) {
       setUnlockedCategories(prev => ({
@@ -155,6 +150,8 @@ export default function InsuranceCentre({ cartCount = 0, selectedCarInsurance = 
     }
   }, [cartCount]);
 
+  // --- Rendering & Utility Functions (Mostly Unchanged) ---
+
   const toggleFlip = (categoryId) => {
     setFlippedCards(prev => ({
       ...prev,
@@ -162,7 +159,6 @@ export default function InsuranceCentre({ cartCount = 0, selectedCarInsurance = 
     }));
   };
 
-  // Map icon IDs to lucide-react components
   const iconMap = {
     car: Car,
     health: Heart,
@@ -170,29 +166,16 @@ export default function InsuranceCentre({ cartCount = 0, selectedCarInsurance = 
     money: PiggyBank,
   };
 
-  const renderIcon = (iconType, isUnlocked) => {
+  const renderIcon = (iconType) => {
     const IconComponent = iconMap[iconType];
-    if (!IconComponent) return null;
-    
-    return (
-      <IconComponent 
-        className="insurance-icon" 
-        size={80}
-        strokeWidth={1.5}
-      />
-    );
+    return IconComponent ? <IconComponent className="insurance-icon" size={80} strokeWidth={1.5} /> : null;
   };
 
-  // Render the back of the card with contract details
+  // Render the back of the card with contract details (minimal change required)
   const renderCardBack = (category) => {
-    const contract = contracts[category.id];
+    // contract is now keyed by category ID (e.g., contracts['car'])
+    const contract = contracts[category.id]; 
     
-    console.log('=== DETAILED DEBUG ===');
-    console.log('Rendering back card for:', category.id);
-    console.log('Contract (full object):', JSON.stringify(contract, null, 2));
-    console.log('Contract keys:', Object.keys(contract || {}));
-    
-    // If no contract data, show generic message
     if (!contract) {
       return (
         <div className="insurance-tile-back">
@@ -207,36 +190,22 @@ export default function InsuranceCentre({ cartCount = 0, selectedCarInsurance = 
       );
     }
 
-    // Try multiple ways to extract the data
+    // Try multiple ways to extract the data (This logic is robust and kept)
     let contractData = contract.data || contract;
-    
-    console.log('Contract data (after extraction):', JSON.stringify(contractData, null, 2));
-    console.log('Contract data keys:', Object.keys(contractData || {}));
     
     // Check if data is nested further
     if (contractData && typeof contractData === 'object' && !contractData.title) {
-      console.log('Title not found at top level, checking nested...');
-      // Maybe it's in contract.data.data or similar
       if (contractData.data) {
-        console.log('Found nested data:', contractData.data);
         contractData = contractData.data;
       }
     }
     
-    const title = contractData?.title || contractData?.name || 'No Title';
-    const subtitle = contractData?.subtitle || contractData?.description || 'No Subtitle';
+    const title = contractData?.title || contractData?.name || contractData?.widget_id || category.label;
     const imageUrl = getImageUrl(contractData?.image_url);
-    
-    console.log('Final extracted values:');
-    console.log('Title:', title);
-    console.log('Subtitle:', subtitle);
-    console.log('Image URL:', imageUrl);
-    console.log('=====================');
 
     return (
       <div className="insurance-tile-back">
         <div className="back-content">
-          {/* Provider Logo */}
           {imageUrl && (
             <div className="contract-logo-container">
               <img 
@@ -246,11 +215,7 @@ export default function InsuranceCentre({ cartCount = 0, selectedCarInsurance = 
               />
             </div>
           )}
-
-          {/* Contract Details - Always show title and subtitle from data */}
           <h4 className="back-title">{title}</h4>
-
-          {/* Actions */}
           <div className="back-actions">
             <button className="back-button back-button-primary">View Contract</button>
             <button className="back-button back-button-secondary">Manage</button>
@@ -266,24 +231,26 @@ export default function InsuranceCentre({ cartCount = 0, selectedCarInsurance = 
         {categories.map(category => {
           const isUnlocked = unlockedCategories[category.id];
           const isFlipped = flippedCards[category.id];
+          const hasContract = !!contracts[category.id];
 
           return (
             <div
               key={category.id}
               className={`insurance-tile-wrapper ${isFlipped && isUnlocked ? 'flipped' : ''} ${isUnlocked ? 'unlocked' : 'locked'}`}
-              onClick={() => isUnlocked && toggleFlip(category.id)}
+              // Only allow flip if the category is unlocked
+              onClick={() => isUnlocked && toggleFlip(category.id)} 
             >
               <div className="insurance-tile-inner">
                 {/* Front of card */}
                 <div className="insurance-tile-front">
                   <div className="icon-container">
-                    {renderIcon(category.icon, isUnlocked)}
+                    {renderIcon(category.icon)}
                   </div>
 
                   <h3 className="insurance-tile-label">{category.label}</h3>
                   
                   {/* Show badge if has contract */}
-                  {contracts[category.id] && (
+                  {hasContract && (
                     <div className="contract-badge">
                       <span className="badge-text">Active</span>
                     </div>

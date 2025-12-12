@@ -226,10 +226,10 @@ banking_client = ProductServiceClient(
 # PUBLIC API FUNCTIONS
 # ============================================
 
-async def fetch_all_widgets_swr() -> List[Dict[str, Any]]:
+async def fetch_all_widgets_swr() -> Dict[str, Any]:
     """
     Aggregates widgets from all product services.
-    Returns a combined list of widgets.
+    Returns widgets grouped by service.
     """
     logger.info("Fetching widgets from all services...")
     
@@ -242,26 +242,58 @@ async def fetch_all_widgets_swr() -> List[Dict[str, Any]]:
         return_exceptions=True
     )
     
-    all_widgets = []
+    # Group widgets by service
+    service_configs = [
+        {"key": "car_insurance", "name": "CarInsurance", "title": "Car Insurance Deals"},
+        {"key": "health_insurance", "name": "HealthInsurance", "title": "Health Insurance Deals"},
+        {"key": "house_insurance", "name": "HouseInsurance", "title": "House Insurance Deals"},
+        {"key": "banking", "name": "Banking", "title": "Banking & Money Deals"}
+    ]
+    
+    grouped_widgets = {}
+    total_count = 0
     
     for i, result in enumerate(results):
-        service_names = ["CarInsurance", "HealthInsurance", "HouseInsurance", "Banking"]
-        service_name = service_names[i]
+        config = service_configs[i]
+        service_key = config["key"]
+        service_name = config["name"]
+        service_title = config["title"]
         
         if isinstance(result, Exception):
             logger.error(f"[{service_name}] Exception during fetch: {result}")
+            grouped_widgets[service_key] = {
+                "title": service_title,
+                "widgets": []
+            }
             continue
         
         if isinstance(result, dict):
             if "widgets" in result:
                 widgets = result["widgets"]
+                # Tag each widget with its service source
+                for widget in widgets:
+                    widget["service"] = service_key
+                
                 logger.info(f"[{service_name}] Retrieved {len(widgets)} widgets")
-                all_widgets.extend(widgets)
+                grouped_widgets[service_key] = {
+                    "title": service_title,
+                    "widgets": widgets
+                }
+                total_count += len(widgets)
             else:
                 logger.warning(f"[{service_name}] No 'widgets' key in response")
+                grouped_widgets[service_key] = {
+                    "title": service_title,
+                    "widgets": []
+                }
+        else:
+            grouped_widgets[service_key] = {
+                "title": service_title,
+                "widgets": []
+            }
     
-    logger.info(f"Total widgets aggregated: {len(all_widgets)}")
-    return all_widgets
+    logger.info(f"Total widgets aggregated: {total_count} across {len(grouped_widgets)} services")
+    return grouped_widgets
 
 
 async def fetch_car_insurance_widget_swr():
@@ -298,7 +330,7 @@ async def close_all_clients():
         banking_client.close()
     )
     logger.info("All service clients closed")
-
+    
 
 
 

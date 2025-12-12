@@ -3,22 +3,15 @@
  * WidgetSection.jsx - Dynamic Widget Section Renderer
  * =========================================================================
  * Intelligently groups and renders widgets based on their component_type.
- * 
- * Supported layouts:
+ * * Supported layouts:
  * - Card widgets → ProductCarousel (horizontal scrolling)
  * - InfoBox widgets → InfoBoxGrid (2-column grid)
  * - SectionHeader widgets → Rendered inline with collapse functionality
- * - Future: ProductGrid, Hero, Banner, etc.
- * 
- * Usage:
- * <WidgetSection 
- *   widgets={allWidgets} 
- *   sectionTitle="Car Insurance Deals"
- *   onAddToCart={handleAddToCart}
- * />
+ * * NOTE: The collapse state (isCollapsed) is now managed by the parent 
+ * component (HomePage) for state persistence.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react'; // <-- Removed useState
 import ProductCarousel from './ProductCarousel';
 import InfoBoxGrid from './InfoBoxGrid';
 import SectionHeader from './SectionHeader';
@@ -28,18 +21,21 @@ export default function WidgetSection({
   widgets, 
   sectionTitle, 
   onAddToCart,
-  showSectionHeaders = true 
+  showSectionHeaders = true,
+  // --- NEW PROPS FOR PERSISTENCE ---
+  isCollapsed,        
+  onToggleCollapse    
+  // --- END NEW PROPS ---
 }) {
-  // State to manage collapsed sections
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Removed: const [isCollapsed, setIsCollapsed] = useState(false);
 
   /**
    * Group widgets by their component_type
    * Returns an object like:
    * {
-   *   Card: [...cardWidgets],
-   *   InfoBox: [...infoBoxWidgets],
-   *   SectionHeader: [...headerWidgets]
+   *   Card: [...cardWidgets],
+   *   InfoBox: [...infoBoxWidgets],
+   *   SectionHeader: [...headerWidgets]
    * }
    */
   const groupedWidgets = useMemo(() => {
@@ -62,10 +58,8 @@ export default function WidgetSection({
     return null;
   }
 
-  // Toggle collapsed state
-  const handleToggle = () => {
-    setIsCollapsed(!isCollapsed);
-  };
+  // Toggle collapsed state now calls the parent handler
+  const handleToggle = onToggleCollapse;
 
   return (
     <div className="widget-section">
@@ -78,8 +72,8 @@ export default function WidgetSection({
               <div key={widget.widget_id || index} className="mb-6">
                 <SectionHeader 
                   data={widget.data || widget} 
-                  onToggle={handleToggle}
-                  isCollapsed={isCollapsed}
+                  onToggle={handleToggle} // <-- Uses prop handler
+                  isCollapsed={isCollapsed} // <-- Uses prop state
                 />
               </div>
             ))}
@@ -113,11 +107,6 @@ export default function WidgetSection({
           )}
 
           {/* Future: Add more layout types here */}
-          {/* Example:
-          {groupedWidgets.ProductGrid && (
-            <ProductGrid widgets={groupedWidgets.ProductGrid} />
-          )}
-          */}
         </>
       )}
     </div>

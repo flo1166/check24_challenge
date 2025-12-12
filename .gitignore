@@ -126,3 +126,5 @@ health-insurance-service/logs/mock-service.log
 house-insurance-service/app/logs/mock-service.log
 house-insurance-service/logs/mock-service.log
 mock-product-service/app/logs/mock-service.log
+full_diagnostic.py
+core-service/logs/core-service.log.2

@@ -4,71 +4,128 @@
  * =========================================================================
  * Features:
  * - Insurance Centre with flip cards
- * - Dynamic widget sections grouped by type
- * - Separate rendering for Cards (carousel) and InfoBoxes (grid)
+ * - Dynamic widget sections grouped by service
+ * - Separate rendering for each product service
  * - Support for multiple product services/sections
+ * - **NEW:** Widget section collapse/expand state is persisted using localStorage.
  */
 
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react'; // <-- Added useCallback, useEffect
 import Loader from '../components/common/Loader';
 import { useNotifications } from '../contexts/NotificationContext';
 import InsuranceCentre from '../components/layout/InsuranceCentre';
 import WidgetSection from '../components/widgets/WidgetSection';
 
+// Constant for localStorage key
+const COLLAPSE_STATE_KEY = 'widgetSectionCollapseState';
+
 export default function HomePage({ data, loading, error, onRetry }) {
   const { updateNotification, notifications } = useNotifications();
   const [selectedCarInsurance, setSelectedCarInsurance] = useState(null);
+  const [selectedHealthInsurance, setSelectedHealthInsurance] = useState(null);
+  const [selectedHouseInsurance, setSelectedHouseInsurance] = useState(null);
+  const [selectedBankingProduct, setSelectedBankingProduct] = useState(null);
+  
+  // NEW STATE: Map of serviceKey -> isCollapsed (boolean)
+  const [collapsedSections, setCollapsedSections] = useState({});
 
   /**
-   * Called when user adds a car insurance widget to cart
-   * Saves the widget data to pass to InsuranceCentre and backend
+   * Effect to load state from localStorage on initial mount
    */
-  const handleCarInsuranceAdded = async (widgetData) => {
-    // 1. Update UI first (instant)
-    setSelectedCarInsurance(widgetData);
-    
-    const userId = 123; // TODO: Get from auth context
-    const apiUrl = `http://localhost:8001/widget/car-insurance/contract`;
-    
-    const payload = {
-      user_id: userId,
-      widget_id: widgetData.widget_id,
-    };
-
+  useEffect(() => {
     try {
-      // 2. Save to database
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-        body: JSON.stringify(payload),
-      });
-      
-      const result = await response.json();
-      console.log('Contract created with ID:', result.contract_id);
-    } catch (error) {
-      console.error('Failed to save contract:', error);
+      const savedState = localStorage.getItem(COLLAPSE_STATE_KEY);
+      if (savedState) {
+        setCollapsedSections(JSON.parse(savedState));
+      }
+    } catch (e) {
+      console.error("Could not load collapse state from localStorage:", e);
     }
+  }, []); // Run only on mount
+
+  /**
+   * Effect to save state to localStorage whenever it changes
+   */
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSE_STATE_KEY, JSON.stringify(collapsedSections));
+    } catch (e) {
+      console.error("Could not save collapse state to localStorage:", e);
+    }
+  }, [collapsedSections]); // Run whenever collapsedSections changes
+
+  /**
+   * Toggles the collapsed state for a specific service key and updates localStorage
+   */
+  const handleToggleCollapse = useCallback((serviceKey) => {
+    setCollapsedSections(prev => {
+      const newState = {
+        ...prev,
+        // If undefined/null, default to false (expanded) and toggle to true (collapsed)
+        [serviceKey]: !prev[serviceKey], 
+      };
+      // State will be saved by the useEffect hook
+      return newState;
+    });
+  }, []);
+
+  /**
+   * Handler factory for adding products to cart by service
+   */
+  const createAddToCartHandler = (serviceKey, apiPort, setState) => {
+    return async (widgetData) => {
+      // 1. Update UI first (instant)
+      setState(widgetData);
+      
+      const userId = 123; // TODO: Get from auth context
+      const apiUrl = `http://localhost:${apiPort}/widget/${serviceKey}/contract`;
+      
+      const payload = {
+        user_id: userId,
+        widget_id: widgetData.widget_id,
+      };
+
+      try {
+        // 2. Save to database
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: JSON.stringify(payload),
+        });
+        
+        const result = await response.json();
+        console.log(`Contract created for ${serviceKey} with ID:`, result.contract_id);
+      } catch (error) {
+        console.error(`Failed to save ${serviceKey} contract:`, error);
+      }
+    };
   };
 
+  // Create handlers for each service
+  const handleCarInsuranceAdded = createAddToCartHandler('car-insurance', 8001, setSelectedCarInsurance);
+  const handleHealthInsuranceAdded = createAddToCartHandler('health-insurance', 8002, setSelectedHealthInsurance);
+  const handleHouseInsuranceAdded = createAddToCartHandler('house-insurance', 8003, setSelectedHouseInsurance);
+  const handleBankingAdded = createAddToCartHandler('banking', 8004, setSelectedBankingProduct);
+
   /**
-   * Check if widgets contain valid data (not just fallback)
-   * Returns true if there are real widgets, false if empty or only fallback
+   * Check if any service has valid widgets (not just fallback)
    */
   const hasValidWidgets = () => {
-    if (!data?.widgets || data.widgets.length === 0) {
+    if (!data?.services) {
       return false;
     }
 
-    // Check if all widgets are fallback widgets
-    const onlyFallback = data.widgets.every(
-      widget => widget.widget_id === 'fallback_error_card'
-    );
-
-    return !onlyFallback;
+    // Check if ANY service has valid widgets
+    return Object.values(data.services).some(service => {
+      const widgets = service.widgets || [];
+      return widgets.length > 0 && !widgets.every(
+        widget => widget.widget_id === 'fallback_error_card'
+      );
+    });
   };
 
   // Loading State
@@ -88,7 +145,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
           <h2 className="text-2xl font-bold text-c24-text-dark mb-3">⚠️ Connection Error</h2>
           <p className="text-c24-text-muted mb-4">{error}</p>
           <p className="text-xs text-c24-text-muted mb-6">
-            Make sure the Core Service (BFF) and Mock Product Service are running.
+            Make sure the Core Service (BFF) and Product Services are running.
           </p>
           <button 
             onClick={onRetry} 
@@ -101,17 +158,20 @@ export default function HomePage({ data, loading, error, onRetry }) {
     );
   }
 
+  // Extract services data
+  const services = data?.services || {};
+
   // Success State
   return (
     <div>
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-c24-primary-deep to-c24-primary-medium text-white p-12 rounded-c24-lg mb-12 text-center">
         <h1 className="text-5xl font-bold mb-3 text-white">
-          {data?.title || "Insurance Centre"}
+          Insurance & Banking Centre
         </h1>
 
         <p className="text-lg opacity-90 mb-8">
-          Find the best insurance deals tailored to your needs
+          Find the best insurance deals and banking products tailored to your needs
         </p>
       </section>
 
@@ -120,6 +180,9 @@ export default function HomePage({ data, loading, error, onRetry }) {
         <InsuranceCentre 
           cartCount={notifications.cart} 
           selectedCarInsurance={selectedCarInsurance}
+          selectedHealthInsurance={selectedHealthInsurance}
+          selectedHouseInsurance={selectedHouseInsurance}
+          selectedBankingProduct={selectedBankingProduct}
         />
       </section>
 
@@ -127,22 +190,56 @@ export default function HomePage({ data, loading, error, onRetry }) {
       {hasValidWidgets() && (
         <>
           {/* Car Insurance Section */}
-          <WidgetSection
-            widgets={data.widgets}
-            sectionTitle="Car Insurance Deals"
-            onAddToCart={handleCarInsuranceAdded}
-            showSectionHeaders={true}
-          />
+          {services.car_insurance?.widgets?.length > 0 && (
+            <WidgetSection
+              widgets={services.car_insurance.widgets}
+              sectionTitle={services.car_insurance.title}
+              onAddToCart={handleCarInsuranceAdded}
+              showSectionHeaders={true}
+              // PROP ADDITIONS: Pass the state and toggle handler
+              isCollapsed={!!collapsedSections['car_insurance']}
+              onToggleCollapse={() => handleToggleCollapse('car_insurance')}
+            />
+          )}
 
-          {/* Future: Add more product sections here */}
-          {/* Example:
-          <WidgetSection
-            widgets={homeInsuranceWidgets}
-            sectionTitle="Home Insurance Deals"
-            onAddToCart={handleHomeInsuranceAdded}
-            showSectionHeaders={true}
-          />
-          */}
+          {/* Health Insurance Section */}
+          {services.health_insurance?.widgets?.length > 0 && (
+            <WidgetSection
+              widgets={services.health_insurance.widgets}
+              sectionTitle={services.health_insurance.title}
+              onAddToCart={handleHealthInsuranceAdded}
+              showSectionHeaders={true}
+              // PROP ADDITIONS: Pass the state and toggle handler
+              isCollapsed={!!collapsedSections['health_insurance']}
+              onToggleCollapse={() => handleToggleCollapse('health_insurance')}
+            />
+          )}
+
+          {/* House Insurance Section */}
+          {services.house_insurance?.widgets?.length > 0 && (
+            <WidgetSection
+              widgets={services.house_insurance.widgets}
+              sectionTitle={services.house_insurance.title}
+              onAddToCart={handleHouseInsuranceAdded}
+              showSectionHeaders={true}
+              // PROP ADDITIONS: Pass the state and toggle handler
+              isCollapsed={!!collapsedSections['house_insurance']}
+              onToggleCollapse={() => handleToggleCollapse('house_insurance')}
+            />
+          )}
+
+          {/* Banking Section */}
+          {services.banking?.widgets?.length > 0 && (
+            <WidgetSection
+              widgets={services.banking.widgets}
+              sectionTitle={services.banking.title}
+              onAddToCart={handleBankingAdded}
+              showSectionHeaders={true}
+              // PROP ADDITIONS: Pass the state and toggle handler
+              isCollapsed={!!collapsedSections['banking']}
+              onToggleCollapse={() => handleToggleCollapse('banking')}
+            />
+          )}
         </>
       )}
 
