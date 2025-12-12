@@ -153,19 +153,15 @@ class ProductServiceClient:
         try:
             data = await self.fetch_car_insurance_data()
             logger.info("ProductServiceClient: Data fetch succeeded")
-            print("[DEBUG] Non-SWR fetch succeeded")
             return data 
         except CircuitBreakerError as e:
             logger.error(f"ProductServiceClient: Circuit Breaker OPEN: {e}")
-            print(f"[DEBUG] Circuit breaker OPEN: {e}")
             return FALLBACK_WIDGET_PAYLOAD
         except httpx.HTTPError as e:
             logger.error(f"ProductServiceClient: HTTP error - {type(e).__name__}: {e}")
-            print(f"[DEBUG] HTTP error: {type(e).__name__}: {e}")
             return FALLBACK_WIDGET_PAYLOAD
         except Exception as e:
             logger.error(f"ProductServiceClient: Unexpected error - {type(e).__name__}: {e}")
-            print(f"[DEBUG] Unexpected error: {type(e).__name__}: {e}")
             return FALLBACK_WIDGET_PAYLOAD
 
     @product_service_breaker

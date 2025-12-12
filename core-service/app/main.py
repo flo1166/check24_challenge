@@ -23,6 +23,31 @@ logger = logging.getLogger(__name__)
 background_tasks: Set[asyncio.Task] = set()
 kafka_consumer_task: Optional[asyncio.Task] = None
 
+async def wait_for_services():
+    """Wait for dependent services to be ready"""
+    import asyncio
+    
+    logger.info("Waiting for dependent services...")
+    
+    # Wait for mock-product-service
+    max_attempts = 15
+    for attempt in range(max_attempts):
+        try:
+            logger.info(f"Checking mock-product-service (attempt {attempt + 1}/{max_attempts})...")
+            response = await product_service_client.client.get("/health")
+            if response.status_code == 200:
+                logger.info("✓ Mock-product-service is ready!")
+                break
+        except Exception as e:
+            logger.warning(f"Mock-product-service not ready: {e}")
+            if attempt < max_attempts - 1:
+                await asyncio.sleep(2)
+            else:
+                logger.error("⚠ Mock-product-service still not ready after waiting")
+    
+    # Small additional delay for database connections to stabilize
+    await asyncio.sleep(1)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -30,10 +55,12 @@ async def lifespan(app: FastAPI):
     """
     global kafka_consumer_task
     
-    # --- STARTUP ---
     logger.info("=" * 60)
     logger.info("Application starting up: Initializing dependencies...")
     logger.info("=" * 60)
+    
+    # WAIT FOR SERVICES TO BE READY
+    await wait_for_services()
     
     try:
         # 1. Initialize Async Redis Client

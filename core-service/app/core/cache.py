@@ -72,30 +72,50 @@ async def get_with_swr(key: str, fetch_function: Callable[[], Any], background_t
     if cached_data:
         data = json.loads(cached_data)
         
-        refresh_flag_key = key + REFRESH_FLAG_SUFFIX
-        is_refreshing = await redis_client.exists(refresh_flag_key)
+        # CHECK IF IT'S FALLBACK DATA - DON'T SERVE IT
+        if isinstance(data, list) and len(data) == 1:
+            if isinstance(data[0], dict) and data[0].get("widget_id") == "fallback_error_card":
+                logger.warning("⚠ Cached data is fallback error card - treating as cache miss")
+                cached_data = None  # Force fresh fetch
         
-        swr_grace_seconds = int(SWR_GRACE_PERIOD.total_seconds())
-        
-        if ttl_remaining > 0 and ttl_remaining <= swr_grace_seconds and not is_refreshing:
-            await redis_client.expire(key, swr_grace_seconds)
+        if cached_data:  # Only use cache if it's not fallback
+            refresh_flag_key = key + REFRESH_FLAG_SUFFIX
+            is_refreshing = await redis_client.exists(refresh_flag_key)
             
-            logger.info(f"Cache hit (STALE - TTL: {ttl_remaining}s). Triggering background refresh.")
-            background_tasks.add_task(_revalidate_and_update, key, fetch_function)
+            swr_grace_seconds = int(SWR_GRACE_PERIOD.total_seconds())
+            
+            if ttl_remaining > 0 and ttl_remaining <= swr_grace_seconds and not is_refreshing:
+                await redis_client.expire(key, swr_grace_seconds)
+                
+                logger.info(f"Cache hit (STALE - TTL: {ttl_remaining}s). Triggering background refresh.")
+                background_tasks.add_task(_revalidate_and_update, key, fetch_function)
+            
+            return data
+    
+    # Cache miss or fallback - perform foreground fetch
+    logger.info(f"Cache miss for {key}. Performing foreground fetch.")
+    
+    try:
+        data = await fetch_function()
+        
+        # DON'T CACHE FALLBACK DATA
+        if data:
+            is_fallback = False
+            if isinstance(data, list) and len(data) == 1:
+                if isinstance(data[0], dict) and data[0].get("widget_id") == "fallback_error_card":
+                    is_fallback = True
+                    logger.warning("⚠ Fetch returned fallback - NOT caching")
+            
+            if not is_fallback:
+                await redis_client.setex(key, TTL, json.dumps(data))
+                logger.info("✓ Fresh data cached successfully")
+            else:
+                logger.warning("⚠ Returning fallback without caching")
         
         return data
-        
-    else:
-        logger.info(f"Cache miss for {key}. Performing foreground fetch.")
-        
-        try:
-            data = await fetch_function()
-            if data:
-                await redis_client.setex(key, TTL, json.dumps(data))
-            return data
-        except Exception as e:
-            logger.error(f"✗ Foreground fetch failed: {e}")
-            raise
+    except Exception as e:
+        logger.error(f"✗ Foreground fetch failed: {e}")
+        raise
 
 async def close_redis_client():
     """Closes the Redis connection."""

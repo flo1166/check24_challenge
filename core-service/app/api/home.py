@@ -4,8 +4,9 @@ from typing import List
 from fastapi import APIRouter, status, HTTPException, BackgroundTasks
 
 from app.core.cache import get_with_swr
-from app.core.clients import fetch_car_insurance_widget_swr, fetch_user_contracts
+from app.core.clients import fetch_car_insurance_widget_swr, fetch_user_contracts, product_service_breaker
 from app.core.models import Widget, WidgetResponse
+
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,22 @@ async def get_user_contracts(user_id: int):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching contracts: {str(e)}"
         )
+    
+@router.get("/debug/circuit-breaker-status")
+async def get_circuit_breaker_status():
+    """Debug endpoint to check circuit breaker status"""
+    return {
+        "state": str(product_service_breaker.current_state),
+        "fail_counter": product_service_breaker.fail_counter,
+        "last_failure": str(product_service_breaker.last_failure_time) if hasattr(product_service_breaker, 'last_failure_time') else None,
+    }
+
+@router.post("/debug/reset-circuit-breaker")
+async def reset_circuit_breaker():
+    """Debug endpoint to manually reset circuit breaker"""
+    product_service_breaker.reset()
+    logger.info("Circuit breaker manually reset")
+    return {"status": "reset", "new_state": str(product_service_breaker.current_state)}
 
 @router.get("/health")
 async def health():
