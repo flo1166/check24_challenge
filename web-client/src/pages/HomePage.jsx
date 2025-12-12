@@ -1,27 +1,27 @@
-import { useState, useRef, useEffect } from 'react';
-import WidgetRenderer from '../components/widgets/WidgetRenderer';
+/**
+ * =========================================================================
+ * HomePage.jsx - Main Home Page with Dynamic Widget Sections
+ * =========================================================================
+ * Features:
+ * - Insurance Centre with flip cards
+ * - Dynamic widget sections grouped by type
+ * - Separate rendering for Cards (carousel) and InfoBoxes (grid)
+ * - Support for multiple product services/sections
+ */
+
+import { useState } from 'react';
 import Loader from '../components/common/Loader';
 import { useNotifications } from '../contexts/NotificationContext';
-import CategoryNav from "../components/navigation/CategoryNav";
 import InsuranceCentre from '../components/layout/InsuranceCentre';
+import WidgetSection from '../components/widgets/WidgetSection';
 
 export default function HomePage({ data, loading, error, onRetry }) {
   const { updateNotification, notifications } = useNotifications();
-  // We use 1 for the step to allow partial views at the end. 
-  // The UI will still show 3, but the logic allows scrolling to the last widget.
-  const [carouselIndex, setCarouselIndex] = useState(0); 
-  const [activeCategory, setActiveCategory] = useState(null);
-  const [carouselHeight, setCarouselHeight] = useState('auto');
   const [selectedCarInsurance, setSelectedCarInsurance] = useState(null);
-  const carouselRef = useRef(null);
-
-  const handleBoughtKonto = () => {
-    updateNotification('cart', 1);
-  };
 
   /**
    * Called when user adds a car insurance widget to cart
-   * Saves the widget data to pass to InsuranceCentre
+   * Saves the widget data to pass to InsuranceCentre and backend
    */
   const handleCarInsuranceAdded = async (widgetData) => {
     // 1. Update UI first (instant)
@@ -35,19 +35,23 @@ export default function HomePage({ data, loading, error, onRetry }) {
       widget_id: widgetData.widget_id,
     };
 
-    // 2. Save to database
-    const response = await fetch(apiUrl, {
+    try {
+      // 2. Save to database
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest', // Force preflight
+          'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify(payload),
       });
-    
-    const result = await response.json();
-    console.log('Contract ID:', result.contract_id);
+      
+      const result = await response.json();
+      console.log('Contract created with ID:', result.contract_id);
+    } catch (error) {
+      console.error('Failed to save contract:', error);
+    }
   };
 
   /**
@@ -66,56 +70,6 @@ export default function HomePage({ data, loading, error, onRetry }) {
 
     return !onlyFallback;
   };
-
-  // Measure the tallest card and set carousel height
-  useEffect(() => {
-    if (!carouselRef.current) return;
-
-    const measureHeight = () => {
-      const slides = carouselRef.current?.querySelectorAll('[data-carousel-slide]');
-      if (slides && slides.length > 0) {
-        let maxHeight = 0;
-        slides.forEach((slide) => {
-          const height = slide.scrollHeight;
-          if (height > maxHeight) maxHeight = height;
-        });
-        setCarouselHeight(maxHeight > 0 ? `${maxHeight}px` : 'auto');
-      }
-    };
-
-    // Measure after render
-    measureHeight();
-
-    // Remeasure on window resize
-    const resizeObserver = new ResizeObserver(measureHeight);
-    resizeObserver.observe(carouselRef.current);
-
-    return () => resizeObserver.disconnect();
-  }, [data?.widgets]);
-
-  // --- Start Navigation Helper Functions ---
-  const totalWidgets = data?.widgets?.length || 0;
-  const slidesPerView = 3;
-  
-  // Maximum index the carousel can start at.
-  // We allow it to be the index of the last widget (totalWidgets - 1) 
-  // so the last widget can be scrolled into view if the user clicks enough times.
-  const maxCarouselIndex = totalWidgets > 0 ? totalWidgets - 1 : 0;
-  
-  // Calculate the index for the next page, allowing it to land on the maxCarouselIndex.
-  const getNextIndex = () => {
-      return Math.min(maxCarouselIndex, carouselIndex + slidesPerView);
-  };
-
-  // Calculate the index for the previous page.
-  const getPrevIndex = () => {
-      return Math.max(0, carouselIndex - slidesPerView);
-  };
-
-  const totalPages = Math.ceil(totalWidgets / slidesPerView);
-  const currentPageIndex = Math.floor(carouselIndex / slidesPerView);
-
-  // --- End Navigation Helper Functions ---
 
   // Loading State
   if (loading) {
@@ -161,7 +115,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
         </p>
       </section>
 
-      {/*Insurance Centre */}
+      {/* Insurance Centre */}
       <section className="mb-16">
         <InsuranceCentre 
           cartCount={notifications.cart} 
@@ -169,90 +123,49 @@ export default function HomePage({ data, loading, error, onRetry }) {
         />
       </section>
 
-      {/* Widgets Carousel - Only show if valid widgets exist */}
+      {/* Dynamic Widget Sections - Only show if valid widgets exist */}
       {hasValidWidgets() && (
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold text-c24-text-dark mb-8">Car Insurance Deals</h2>
-          
-          <div className="relative">
-            <div className="w-full">
-              <div className="relative overflow-hidden" style={{ height: carouselHeight }} ref={carouselRef}>
-                <div 
-                  className="flex transition-transform duration-300 ease-out items-stretch"
-                  style={{ 
-                    // Use the slidesPerView variable for cleaner logic
-                    transform: `translateX(calc(-${carouselIndex} * (100% / ${slidesPerView})))` 
-                  }}
-                >
-                  {data.widgets
-                    .sort((a, b) => (a.priority || 0) - (b.priority || 0))
-                    .map((widget, index) => (
-                      <div 
-                        key={widget.widget_id || index}
-                        data-carousel-slide
-                        className="w-full lg:w-1/3 flex-shrink-0 px-3"
-                      >
-                        <WidgetRenderer 
-                          widget={widget} 
-                          index={index}
-                          onAddToCart={handleCarInsuranceAdded}
-                        />
-                      </div>
-                    ))}
-                </div>
-              </div>
+        <>
+          {/* Car Insurance Section */}
+          <WidgetSection
+            widgets={data.widgets}
+            sectionTitle="Car Insurance Deals"
+            onAddToCart={handleCarInsuranceAdded}
+            showSectionHeaders={true}
+          />
 
-              {/* Dot Indicators - Show pages (groups of 3) */}
-              <div className="flex justify-center gap-2 mt-6">
-                {Array.from({ length: totalPages }).map((_, pageIndex) => (
-                  <button
-                    key={pageIndex}
-                    // Jump to the start of the page
-                    onClick={() => setCarouselIndex(pageIndex * slidesPerView)}
-                    className={`w-4 h-2 rounded-full transition-colors ${
-                      currentPageIndex === pageIndex ? 'bg-c24-primary-light' : 'bg-c24-text-muted'
-                    }`}
-                    aria-label={`Go to page ${pageIndex + 1}`}
-                  />
-                ))}
-              </div>
-            </div>
+          {/* Future: Add more product sections here */}
+          {/* Example:
+          <WidgetSection
+            widgets={homeInsuranceWidgets}
+            sectionTitle="Home Insurance Deals"
+            onAddToCart={handleHomeInsuranceAdded}
+            showSectionHeaders={true}
+          />
+          */}
+        </>
+      )}
 
-            {/* Left Navigation Button */}
-            <button
-              // Use the helper function
-              onClick={() => setCarouselIndex(getPrevIndex())}
-              className="absolute left-[-30px] top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-c24-text-muted/10 transition-colors disabled:opacity-50 z-10"
-              disabled={carouselIndex === 0}
-              aria-label="Previous 3 slides"
-            >
-              <svg className="w-6 h-6 text-c24-text-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-
-            {/* Right Navigation Button */}
-            <button
-              // Use the helper function
-              onClick={() => setCarouselIndex(getNextIndex())}
-              className="absolute right-[-30px] top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-c24-text-muted/10 transition-colors disabled:opacity-50 z-10"
-              // Corrected logic: Disable when the carousel is already showing the last reachable index.
-              // This allows scrolling to the very last widget (index 42).
-              disabled={carouselIndex >= maxCarouselIndex} 
-              aria-label="Next 3 slides"
-            >
-              <svg className="w-6 h-6 text-c24-text-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+      {/* Empty State - No Widgets */}
+      {!hasValidWidgets() && (
+        <div className="text-center py-16">
+          <div className="bg-white p-8 rounded-c24-lg shadow-c24-md inline-block">
+            <h3 className="text-2xl font-bold text-c24-text-dark mb-3">
+              No Deals Available
+            </h3>
+            <p className="text-c24-text-muted mb-6">
+              Check back soon for personalized insurance recommendations!
+            </p>
           </div>
-        </section>
+        </div>
       )}
 
       {/* Footer CTA */}
       <section className="bg-gradient-to-r from-c24-primary-medium to-c24-primary-deep text-white text-center p-12 rounded-c24-lg">
         <h2 className="text-3xl font-bold mb-4">Ready to Save Money?</h2>
-        <p className="text-lg opacity-90 mb-8">Join millions of smart shoppers finding the best deals on Check24</p>
+        <p className="text-lg opacity-90 mb-8">
+          Join millions of smart shoppers finding the best deals on Check24
+        </p>
         <button className="px-8 py-4 bg-c24-highlight-yellow text-c24-primary-deep rounded-c24-sm font-bold hover:opacity-90 transition-opacity">
           Get Started Now
         </button>

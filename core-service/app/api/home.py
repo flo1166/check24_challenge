@@ -6,7 +6,7 @@ from fastapi import APIRouter, status, HTTPException, BackgroundTasks
 from app.core.cache import get_with_swr
 from app.core.clients import fetch_car_insurance_widget_swr, fetch_user_contracts, product_service_breaker
 from app.core.models import Widget, WidgetResponse
-
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +140,17 @@ async def reset_circuit_breaker():
     product_service_breaker.reset()
     logger.info("Circuit breaker manually reset")
     return {"status": "reset", "new_state": str(product_service_breaker.current_state)}
+
+
+@router.get("/stream/updates")
+async def stream_updates():
+    async def event_stream():
+        while True:
+            # Wait for Kafka events or other triggers
+            yield f"data: {json.dumps({'update': 'available'})}\n\n"
+            await asyncio.sleep(30)
+    
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 @router.get("/health")
 async def health():

@@ -11,6 +11,34 @@ import { Heart, ShoppingCart } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { getImageUrl } from '../../utils/imageLoader';
 
+function ContentList({ content }) {
+  // 1. Split the content by the period (.)
+  // 2. Filter out empty strings
+  // 3. Trim whitespace from each item
+  const listItems = content
+    .split('.')
+    .filter(item => item.trim() !== '')
+    .map(item => item.trim());
+
+  return (
+    <ul className="text-c24-sm text-c24-text-muted leading-relaxed">
+      {listItems.map((item, index) => (
+        // Using a <li> element for proper list semantics
+        <li key={index} className="flex items-start mb-2">
+          {/* Plain Unicode Checkmark */}
+          <span className="mr-2 flex-shrink-0">
+            ✓
+          </span>
+          {/* The list item content */}
+          <span>
+            {item}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function Card({ data, widgetData, onAddToCart }) {
   const { updateNotification } = useNotifications();
   const [isFavorite, setIsFavorite] = useState(false);
@@ -99,7 +127,7 @@ export default function Card({ data, widgetData, onAddToCart }) {
 
           {/* Description */}
           {/* Removed mb-4 here and added it to the parent wrapper instead */}
-          <p className="text-c24-sm text-c24-text-muted line-clamp-3 leading-relaxed">{content}</p>
+          <ContentList content={content} />
         </div>
 
         {/* Footer with Button is now anchored to the bottom using mt-auto */}

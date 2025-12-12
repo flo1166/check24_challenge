@@ -9,6 +9,7 @@
 import React, { Suspense } from 'react';
 import Card from './Card';
 import InfoBox from './InfoBox';
+import SectionHeader from './SectionHeader';
 import Loader from '../common/Loader';
 
 /**
@@ -18,6 +19,7 @@ import Loader from '../common/Loader';
 const COMPONENT_MAP = {
   Card,
   InfoBox,
+  SectionHeader,
   // Hero: Hero,
   // ProductGrid: ProductGrid,
   // Carousel: Carousel,

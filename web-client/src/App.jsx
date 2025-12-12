@@ -38,11 +38,15 @@ export default function App() {
    * This happens on component mount and periodically via polling
    */
   useEffect(() => {
-    fetchWidgetData();
+  fetchWidgetData(); // Initial fetch
+  
+  const eventSource = new EventSource('http://localhost:8000/stream/updates');
+  
+  eventSource.onmessage = (event) => {
+      fetchWidgetData(); // Refetch only when server pushes update
+    };
     
-    // Set up polling interval (every 10 seconds)
-    const interval = setInterval(fetchWidgetData, 10000);
-    return () => clearInterval(interval);
+    return () => eventSource.close();
   }, []);
 
   async function fetchWidgetData() {
