@@ -280,6 +280,7 @@ services:
     volumes:
       - ./core-service/app:/app/app
       - ./core-service/logs:/app/logs
+      - ./web-client/src/assets:/app/assets:ro
     depends_on:
       - mock-product-service
       - health-insurance-service

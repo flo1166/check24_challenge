@@ -20,12 +20,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.check24.app.data.model.ContractData
 import com.check24.app.data.model.InsuranceCategory
 import com.check24.app.ui.theme.Check24Colors
+import com.check24.app.utils.ImageUtils
 
 @Composable
 fun InsuranceCentre(
@@ -60,7 +63,15 @@ fun InsuranceCentre(
             )
         )
     }
-    
+
+    // Debug: Log all contract keys
+    LaunchedEffect(contracts) {
+        println("📋 Contracts available: ${contracts.keys}")
+        contracts.forEach { (key, value) ->
+            println("   - $key: ${value.widget_id}, title: ${value.data?.title}")
+        }
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -72,7 +83,10 @@ fun InsuranceCentre(
             items(categories) { category ->
                 val contract = contracts[category.serviceKey]
                 val isUnlocked = contract != null
-                
+
+                // Debug logging
+                println("🔍 Category: ${category.label}, ServiceKey: ${category.serviceKey}, Has Contract: $isUnlocked")
+
                 InsuranceTile(
                     category = category,
                     isUnlocked = isUnlocked,
@@ -90,7 +104,7 @@ private fun InsuranceTile(
     contract: ContractData?
 ) {
     var isFlipped by remember { mutableStateOf(false) }
-    
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -124,16 +138,16 @@ private fun InsuranceTile(
                         modifier = Modifier.size(80.dp),
                         tint = if (isUnlocked) Check24Colors.PrimaryMedium else Color.Gray
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Text(
                         text = category.label,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isUnlocked) Check24Colors.TextDark else Color.Gray
                     )
-                    
+
                     if (contract != null) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Surface(
@@ -150,7 +164,7 @@ private fun InsuranceTile(
                             )
                         }
                     }
-                    
+
                     if (!isUnlocked) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Icon(
@@ -170,19 +184,62 @@ private fun InsuranceTile(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = contract?.data?.title ?: category.label,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Check24Colors.TextDark
-                    )
-                    
-                    Text(
-                        text = category.description,
-                        fontSize = 12.sp,
-                        color = Check24Colors.TextMuted
-                    )
-                    
+                    // Title section
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        // Logo/Image if available
+                        contract?.data?.image_url?.let { imagePath ->
+                            val imageUrl = ImageUtils.getImageUrl(imagePath)
+                            if (imageUrl != null) {        AsyncImage(
+                                model = imageUrl,
+                                // Update this line to check nested data if title is missing at top level
+                                contentDescription = contract.data?.title,
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .padding(bottom = 8.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                            }
+                        }
+
+                        Text(
+                            // Update this line as well
+                            text = contract?.data?.title ?: category.label,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Check24Colors.TextDark
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Show additional contract data if available
+                        contract?.data?.let { data ->
+                            data.subtitle?.let {
+                                Text(
+                                    text = it,
+                                    fontSize = 12.sp,
+                                    color = Check24Colors.TextMuted
+                                )
+                            }
+
+                            data.pricing?.let { pricing ->
+                                // Add this check to ensure we have a valid price value to display
+                                if (pricing.price != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "${pricing.price} ${pricing.currency}${pricing.frequency?.let { "/$it" } ?: ""}",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Check24Colors.PrimaryMedium
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Action buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -196,7 +253,7 @@ private fun InsuranceTile(
                         ) {
                             Text("View", fontSize = 12.sp)
                         }
-                        
+
                         OutlinedButton(
                             onClick = { /* Manage */ },
                             modifier = Modifier.weight(1f),

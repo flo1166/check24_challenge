@@ -67,7 +67,7 @@ fun WidgetSection(
                             color = Color.White
                         )
                     }
-                    
+
                     IconButton(onClick = onToggleCollapse) {
                         Icon(
                             imageVector = if (isCollapsed) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
@@ -78,7 +78,7 @@ fun WidgetSection(
                 }
             }
         }
-        
+
         // Widget Content
         AnimatedVisibility(
             visible = !isCollapsed,
@@ -87,7 +87,7 @@ fun WidgetSection(
         ) {
             Column {
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 // Card widgets in horizontal scroll
                 val cardWidgets = widgets.filter { it.component_type == "Card" }
                 if (cardWidgets.isNotEmpty()) {
@@ -104,12 +104,12 @@ fun WidgetSection(
                         }
                     }
                 }
-                
+
                 // InfoBox widgets
                 val infoBoxWidgets = widgets.filter { it.component_type == "InfoBox" }
                 if (infoBoxWidgets.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.padding(horizontal = 16.dp)
@@ -119,8 +119,23 @@ fun WidgetSection(
                         }
                     }
                 }
-                
+
+                // ... inside AnimatedVisibility -> Column ...
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+
+                val gridWidgets = widgets.filter { it.component_type == "ProductGrid" }
+                gridWidgets.forEach { widget ->
+                    ProductGrid(
+                        widget = widget,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
+
             }
         }
     }
@@ -129,7 +144,7 @@ fun WidgetSection(
 @Composable
 private fun InfoBoxCard(widget: Widget) {
     val data = widget.data
-    
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -162,9 +177,9 @@ private fun InfoBoxCard(widget: Widget) {
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.width(12.dp))
-                
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = data?.title ?: "Information",
@@ -172,7 +187,7 @@ private fun InfoBoxCard(widget: Widget) {
                         fontWeight = FontWeight.Bold,
                         color = Check24Colors.TextDark
                     )
-                    
+
                     data?.subtitle?.let { subtitle ->
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
@@ -184,7 +199,7 @@ private fun InfoBoxCard(widget: Widget) {
                     }
                 }
             }
-            
+
             data?.content?.let { content ->
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
@@ -194,12 +209,12 @@ private fun InfoBoxCard(widget: Widget) {
                     lineHeight = 18.sp
                 )
             }
-            
+
             data?.footer?.let { footer ->
                 Spacer(modifier = Modifier.height(12.dp))
                 Divider(color = Check24Colors.PrimaryMedium.copy(alpha = 0.2f))
                 Spacer(modifier = Modifier.height(12.dp))
-                
+
                 TextButton(
                     onClick = { /* TODO */ },
                     modifier = Modifier.fillMaxWidth()

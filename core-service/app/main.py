@@ -1,6 +1,7 @@
 # ===== LOGGING MUST BE CONFIGURED FIRST =====
 from logging.config import dictConfig
 from app.core.logging_config import LOGGING_CONFIG
+from pathlib import Path
 
 dictConfig(LOGGING_CONFIG)
 
@@ -12,6 +13,8 @@ from typing import Set, Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 from app.api import home
 from app.core.cache import init_redis_client, close_redis_client
 from app.core.clients import (
@@ -145,13 +148,23 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://10.0.2.2",      # Android Emulator default alias
+        "http://localhost",
+        "null"                  # Often needed for mobile apps hitting static files
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(home.router)
+
+ASSETS_PATH = Path("/app/assets")  # Simple path inside container
+
+if ASSETS_PATH.exists():
+    app.mount("/assets", StaticFiles(directory=str(ASSETS_PATH)), name="assets")
 
 @app.get("/health")
 async def health_check():

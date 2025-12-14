@@ -88,7 +88,7 @@ dependencies {
     
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
-    
+    implementation("io.coil-kt:coil-svg:2.5.0")
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     

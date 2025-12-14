@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.check24.app.data.model.Widget
 import com.check24.app.ui.theme.Check24Colors
+import com.check24.app.utils.ImageUtils
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -41,7 +42,7 @@ fun ProductCard(
 
     val coroutineScope = rememberCoroutineScope()
     val data = widget.data
-    
+
     Card(
         modifier = modifier
             .width(280.dp)
@@ -59,15 +60,35 @@ fun ProductCard(
                     .height(180.dp)
                     .background(Check24Colors.LightGray)
             ) {
-                if (data?.image_url != null) {
+                val imageUrl = ImageUtils.getImageUrl(data?.image_url)
+                if (imageUrl != null) {
                     AsyncImage(
-                        model = data.image_url,
-                        contentDescription = data.title,
+                        model = imageUrl,
+                        contentDescription = data?.title,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Fit,
+                        onError = { error ->
+                            println("❌ Failed to load image: $imageUrl")
+                            println("   Error: ${error.result.throwable.message}")
+                        },
+                        onSuccess = {
+                            println("✅ Image loaded: $imageUrl")
+                        }
                     )
+                } else {
+                    // Placeholder for missing image
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No Image",
+                            color = Check24Colors.TextMuted,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
-                
+
                 // Rating Badge
                 data?.rating?.score?.let { score ->
                     Surface(
@@ -97,7 +118,7 @@ fun ProductCard(
                         }
                     }
                 }
-                
+
                 // Favorite Button
                 IconButton(
                     onClick = {
@@ -117,7 +138,7 @@ fun ProductCard(
                     )
                 }
             }
-            
+
             // Content Section
             Column(
                 modifier = Modifier
@@ -134,7 +155,7 @@ fun ProductCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                
+
                 // Subtitle
                 data?.subtitle?.let { subtitle ->
                     Spacer(modifier = Modifier.height(4.dp))
@@ -145,7 +166,7 @@ fun ProductCard(
                         color = Check24Colors.PrimaryMedium
                     )
                 }
-                
+
                 // Price
                 data?.pricing?.let { pricing ->
                     Spacer(modifier = Modifier.height(8.dp))
@@ -153,7 +174,7 @@ fun ProductCard(
                         verticalAlignment = Alignment.Bottom
                     ) {
                         Text(
-                            text = "${pricing.price} ${pricing.currency ?: "€"}",
+                            text = "${pricing.price} ${pricing.currency ?: "â‚¬"}",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Check24Colors.TextDark
@@ -168,7 +189,7 @@ fun ProductCard(
                         }
                     }
                 }
-                
+
                 // Description
                 data?.content?.let { content ->
                     Spacer(modifier = Modifier.height(8.dp))
@@ -181,9 +202,9 @@ fun ProductCard(
                         lineHeight = 16.sp
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.weight(1f))
-                
+
                 // Add to Cart Button
                 Button(
                     onClick = {

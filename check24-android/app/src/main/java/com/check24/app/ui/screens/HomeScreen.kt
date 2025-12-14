@@ -50,7 +50,7 @@ fun HomeScreen(
                     
                     // Insurance Centre
                     item {
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         InsuranceCentre(contracts = uiState.contracts)
                     }
                     
@@ -58,7 +58,7 @@ fun HomeScreen(
                     uiState.homeData?.services?.forEach { (serviceKey, serviceData) ->
                         if (serviceData.widgets.isNotEmpty()) {
                             item {
-                                Spacer(modifier = Modifier.height(24.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 WidgetSection(
                                     title = serviceData.title,
                                     widgets = serviceData.widgets,
@@ -66,7 +66,7 @@ fun HomeScreen(
                                     onToggleCollapse = { onToggleSection(serviceKey) },
                                     onAddToCart = { widget -> onAddToCart(serviceKey, widget) },
                                     onToggleFavorite = onToggleFavorite,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                    modifier = Modifier.padding(horizontal = 8.dp)
                                 )
                             }
                         }
@@ -74,9 +74,9 @@ fun HomeScreen(
                     
                     // Footer CTA
                     item {
-                        Spacer(modifier = Modifier.height(32.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         FooterCTA()
-                        Spacer(modifier = Modifier.height(32.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             }
