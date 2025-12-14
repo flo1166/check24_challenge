@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="check24_primary_deep">#022D94</color>
+    <color name="check24_primary_medium">#0563C1</color>
+    <color name="check24_primary_light">#0578E1</color>
+    <color name="check24_alert_red">#E30613</color>
+    <color name="check24_highlight_yellow">#FFBB1C</color>
+</resources>
