@@ -17,20 +17,20 @@ data class HomeUiState(
 )
 
 class HomeViewModel(private val repository: Check24Repository) : ViewModel() {
-    
+
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-    
+
     private val userId = 123 // TODO: Get from auth
-    
+
     init {
         loadData()
     }
-    
+
     fun loadData() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            
+
             // Load home data
             repository.getHomeData().collect { result ->
                 result.fold(
@@ -39,7 +39,7 @@ class HomeViewModel(private val repository: Check24Repository) : ViewModel() {
                         loadContracts()
                     },
                     onFailure = { error ->
-                        _uiState.update { 
+                        _uiState.update {
                             it.copy(
                                 error = error.message ?: "Unknown error",
                                 isLoading = false
@@ -50,27 +50,38 @@ class HomeViewModel(private val repository: Check24Repository) : ViewModel() {
             }
         }
     }
-    
+
     private fun loadContracts() {
         viewModelScope.launch {
             repository.getUserContracts(userId).collect { result ->
                 result.fold(
                     onSuccess = { response ->
                         if (response.has_contract && response.contracts != null) {
+                            println("📋 Contracts loaded: ${response.contracts.keys}")
+                            response.contracts.forEach { (key, contract) ->
+                                println("   - $key: widget_id=${contract.widget_id}")
+                            }
                             _uiState.update { it.copy(contracts = response.contracts) }
+                            println("✨ UI updated - purchased widgets will now be filtered out")
+                        } else {
+                            println("📋 No contracts found for user $userId")
                         }
                     },
                     onFailure = { error ->
                         // Silently fail for contracts - not critical
-                        println("Failed to load contracts: ${error.message}")
+                        println("❌ Failed to load contracts: ${error.message}")
                     }
                 )
             }
         }
     }
-    
+
     fun addToCart(serviceKey: String, widget: Widget) {
         viewModelScope.launch {
+            println("🛒 Adding to cart:")
+            println("   Service: $serviceKey")
+            println("   Widget ID: ${widget.widget_id}")
+
             // Update UI immediately
             _uiState.update { state ->
                 state.copy(
@@ -79,20 +90,21 @@ class HomeViewModel(private val repository: Check24Repository) : ViewModel() {
                     )
                 )
             }
-            
+
             // Save to backend
             repository.createContract(serviceKey, userId, widget.widget_id).fold(
                 onSuccess = { response ->
-                    println("Contract created: ${response.contract_id}")
-                    loadContracts() // Reload contracts
+                    println("✅ Contract created: ${response.contract_id}")
+                    println("   Reloading home data to get updated widget list...")
+                    loadData() // Reload everything - backend will filter widgets
                 },
                 onFailure = { error ->
-                    println("Failed to create contract: ${error.message}")
+                    println("❌ Failed to create contract: ${error.message}")
                 }
             )
         }
     }
-    
+
     fun updateNotification(type: String, increment: Int) {
         _uiState.update { state ->
             val current = state.notifications
@@ -107,7 +119,7 @@ class HomeViewModel(private val repository: Check24Repository) : ViewModel() {
             state.copy(notifications = updated)
         }
     }
-    
+
     fun toggleSectionCollapse(serviceKey: String) {
         _uiState.update { state ->
             val collapsed = state.collapsedSections.toMutableSet()

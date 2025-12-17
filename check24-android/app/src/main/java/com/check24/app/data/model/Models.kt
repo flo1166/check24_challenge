@@ -19,11 +19,14 @@ data class Widget(
     val widget_id: String,
     val component_type: String,
     val priority: Int = 0,
-    val data: WidgetData? = null
+    val data: WidgetData? = null,
+    val service: String? = null
 )
 
 @Serializable
 data class WidgetData(
+    val id: String? = null,
+    val type: String? = null,
     val title: String? = null,
     val subtitle: String? = null,
     val content: String? = null,
@@ -33,19 +36,25 @@ data class WidgetData(
     val footer: String? = null,
     val pricing: Pricing? = null,
     val rating: Rating? = null,
+    val data: ProductGridData? = null  // For nested ProductGrid structure
+)
+
+@Serializable
+data class ProductGridData(
     val products: List<ProductData>? = null
 )
 
 @Serializable
 data class Pricing(
-    val price: String? = null,
+    val price: Double? = null,  // Changed from String to Double
     val currency: String? = "€",
     val frequency: String? = null
 )
 
 @Serializable
 data class Rating(
-    val score: Double? = null
+    val score: Double? = null,
+    val label: String? = null
 )
 
 @Serializable
@@ -56,7 +65,7 @@ data class ProductData(
     val content: String? = null,
     val image_url: String? = null,
     val pricing: Pricing? = null,
-    val rating: Rating? = null
+    val rating: Double? = null  // Changed from Rating? to Double? for ProductGrid products
 )
 
 @Serializable

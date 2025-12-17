@@ -163,7 +163,8 @@ fun ProductCard(
                         text = subtitle,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Check24Colors.PrimaryMedium
+                        color = Check24Colors.PrimaryMedium,
+                        lineHeight = 15.sp,
                     )
                 }
 
@@ -220,7 +221,7 @@ fun ProductCard(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isAdded) Check24Colors.SuccessGreen else Check24Colors.PrimaryMedium
                     ),
-                    shape = RoundedCornerShape(6.dp)
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         Icons.Default.ShoppingCart,
@@ -230,7 +231,7 @@ fun ProductCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = if (isAdded) "Added!" else "Add to Cart",
-                        fontSize = 12.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                 }

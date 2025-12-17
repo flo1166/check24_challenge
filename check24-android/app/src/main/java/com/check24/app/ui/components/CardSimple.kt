@@ -24,6 +24,8 @@ import coil.compose.AsyncImage
 import com.check24.app.data.model.ProductData
 import com.check24.app.ui.theme.Check24Colors
 import com.check24.app.utils.ImageUtils
+import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 fun CardSimple(
@@ -82,11 +84,25 @@ fun CardSimple(
 
             // 3. Price
             data.pricing?.let { pricing ->
+                // --- START: Formatting Logic ---
+                val numberFormatter = NumberFormat.getNumberInstance(Locale.GERMANY).apply {
+                    // Set desired decimal places (e.g., 2 for currency)
+                    minimumFractionDigits = 2
+                    maximumFractionDigits = 2
+                }
+
+                // Format the number part
+                val formattedPrice = numberFormatter.format(pricing.price)
+
+                // Construct the final text string
+                val textToShow = "$formattedPrice ${pricing.currency}"
+                // --- END: Formatting Logic ---
+
                 Text(
-                    text = "${pricing.price} ${pricing.currency}",
+                    text = textToShow, // Use the localized string here
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Check24Colors.HighlightYellow, // Or your primary color
+                    color = Check24Colors.PrimaryDeep, // Or your primary color
                     modifier = Modifier.align(Alignment.End)
                 )
             }

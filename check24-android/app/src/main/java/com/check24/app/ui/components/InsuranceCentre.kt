@@ -29,6 +29,8 @@ import com.check24.app.data.model.ContractData
 import com.check24.app.data.model.InsuranceCategory
 import com.check24.app.ui.theme.Check24Colors
 import com.check24.app.utils.ImageUtils
+import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 fun InsuranceCentre(
@@ -198,7 +200,7 @@ private fun InsuranceTile(
                                 contentDescription = contract.data?.title,
                                 modifier = Modifier
                                     .size(80.dp)
-                                    .padding(bottom = 8.dp),
+                                    .padding(bottom = 4.dp),
                                 contentScale = ContentScale.Fit
                             )
                             }
@@ -227,9 +229,27 @@ private fun InsuranceTile(
                             data.pricing?.let { pricing ->
                                 // Add this check to ensure we have a valid price value to display
                                 if (pricing.price != null) {
+
+                                    // --- START: German Formatting Logic ---
+                                    val numberFormatter = NumberFormat.getNumberInstance(Locale.GERMANY).apply {
+                                        // Ensure two decimal places (e.g., 1.234,56)
+                                        minimumFractionDigits = 2
+                                        maximumFractionDigits = 2
+                                    }
+
+                                    // 1. Format the price value using the German formatter
+                                    val formattedPrice = numberFormatter.format(pricing.price)
+
+                                    // 2. Construct the optional frequency string (e.g., "/Monat" or empty)
+                                    val frequencyString = pricing.frequency?.let { "/$it" } ?: ""
+
+                                    // 3. Assemble the final text string: "1.234,56 EUR/Monat"
+                                    val textToShow = "$formattedPrice ${pricing.currency}$frequencyString"
+                                    // --- END: Formatting Logic ---
+
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "${pricing.price} ${pricing.currency}${pricing.frequency?.let { "/$it" } ?: ""}",
+                                        text = textToShow, // Use the localized string here
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = Check24Colors.PrimaryMedium
@@ -252,18 +272,6 @@ private fun InsuranceTile(
                             )
                         ) {
                             Text("View", fontSize = 12.sp)
-                        }
-
-                        OutlinedButton(
-                            onClick = { /* Manage */ },
-                            modifier = Modifier.weight(1f),
-                            border = BorderStroke(1.dp, Check24Colors.PrimaryMedium)
-                        ) {
-                            Text(
-                                "Manage",
-                                fontSize = 12.sp,
-                                color = Check24Colors.PrimaryMedium
-                            )
                         }
                     }
                 }

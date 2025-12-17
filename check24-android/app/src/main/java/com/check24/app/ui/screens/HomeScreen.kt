@@ -47,31 +47,48 @@ fun HomeScreen(
                     item {
                         HeroSection()
                     }
-                    
+
                     // Insurance Centre
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
                         InsuranceCentre(contracts = uiState.contracts)
                     }
-                    
-                    // Dynamic Widget Sections
-                    uiState.homeData?.services?.forEach { (serviceKey, serviceData) ->
-                        if (serviceData.widgets.isNotEmpty()) {
-                            item {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                WidgetSection(
-                                    title = serviceData.title,
-                                    widgets = serviceData.widgets,
-                                    isCollapsed = uiState.collapsedSections.contains(serviceKey),
-                                    onToggleCollapse = { onToggleSection(serviceKey) },
-                                    onAddToCart = { widget -> onAddToCart(serviceKey, widget) },
-                                    onToggleFavorite = onToggleFavorite,
-                                    modifier = Modifier.padding(horizontal = 8.dp)
-                                )
-                            }
+
+                    // Dynamic Widget Sections - Only show sections WITH widgets
+                    val sectionsWithWidgets = uiState.homeData?.services?.filter { (_, serviceData) ->
+                        serviceData.widgets.isNotEmpty()
+                    }
+
+                    val sectionsWithoutWidgets = uiState.homeData?.services?.filter { (_, serviceData) ->
+                        serviceData.widgets.isEmpty()
+                    }
+
+                    // Show sections that have widgets
+                    sectionsWithWidgets?.forEach { (serviceKey, serviceData) ->
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            WidgetSection(
+                                title = serviceData.title,
+                                widgets = serviceData.widgets,
+                                isCollapsed = uiState.collapsedSections.contains(serviceKey),
+                                onToggleCollapse = { onToggleSection(serviceKey) },
+                                onAddToCart = { widget -> onAddToCart(serviceKey, widget) },
+                                onToggleFavorite = onToggleFavorite,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
                         }
                     }
-                    
+
+                    // Show single "No Deals Available" message if any sections are empty
+                    if (!sectionsWithoutWidgets.isNullOrEmpty()) {
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            NoDealsAvailableSection(
+                                emptyServices = sectionsWithoutWidgets.values.map { it.title }
+                            )
+                        }
+                    }
+
                     // Footer CTA
                     item {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -116,9 +133,9 @@ private fun HeroSection() {
                     color = Color.White,
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(12.dp))
-                
+
                 Text(
                     text = "Find the best insurance deals and banking products tailored to your needs",
                     fontSize = 14.sp,
@@ -126,6 +143,42 @@ private fun HeroSection() {
                     textAlign = TextAlign.Center
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun NoDealsAvailableSection(emptyServices: List<String>) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = Color.White,
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, Check24Colors.PrimaryMedium.copy(alpha = 0.2f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "No Deals Available",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Check24Colors.TextDark
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Check back soon for personalized insurance recommendations!",
+                fontSize = 14.sp,
+                color = Check24Colors.TextMuted,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -162,18 +215,18 @@ private fun FooterCTA() {
                     color = Color.White,
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(12.dp))
-                
+
                 Text(
                     text = "Join millions of smart shoppers finding the best deals on Check24",
                     fontSize = 14.sp,
                     color = Color.White.copy(alpha = 0.9f),
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(20.dp))
-                
+
                 Button(
                     onClick = { /* TODO */ },
                     colors = ButtonDefaults.buttonColors(
@@ -235,31 +288,31 @@ private fun ErrorScreen(error: String, onRetry: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "⚠️ Connection Error",
+                    text = "âš ï¸ Connection Error",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Check24Colors.TextDark
                 )
-                
+
                 Spacer(modifier = Modifier.height(12.dp))
-                
+
                 Text(
                     text = error,
                     color = Check24Colors.TextMuted,
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Text(
                     text = "Make sure the Core Service (BFF) and Product Services are running.",
                     fontSize = 11.sp,
                     color = Check24Colors.TextMuted,
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(20.dp))
-                
+
                 Button(
                     onClick = onRetry,
                     colors = ButtonDefaults.buttonColors(

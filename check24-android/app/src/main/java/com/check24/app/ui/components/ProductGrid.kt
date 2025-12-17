@@ -22,8 +22,7 @@ fun ProductGrid(
 ) {
     // 1. Robust extraction (Updated to handle nested JSON "data.data.products")
     // If your WidgetData class does not have a 'data' field, you must add it to the model.
-    val products = widget.data?.products
-        ?: widget.data?.products
+    val products = widget.data?.data?.products
         ?: emptyList()
 
     // 2. Title Extraction
