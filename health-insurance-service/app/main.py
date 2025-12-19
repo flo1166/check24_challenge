@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from aiokafka import AIOKafkaProducer
 from aiokafka.errors import KafkaError
 import json
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,40 @@ DB_PORT = "5432"
 SQLALCHEMY_DATABASE_URL = (
     f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
+
+CORE_SERVICE_URL = os.getenv("CORE_SERVICE_URL", "http://core-service:8000")
+
+async def invalidate_cache_via_core_service():
+    """
+    Call Core Service to invalidate cache synchronously.
+    This ensures immediate cache invalidation (Option 3).
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            logger.info("📞 Calling Core Service to invalidate cache...")
+            
+            response = await client.post(
+                f"{CORE_SERVICE_URL}/cache/invalidate",
+                timeout=5.0
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"✅ Cache invalidated via Core Service: {result.get('keys_deleted', 0)} keys")
+                return True
+            else:
+                logger.warning(f"⚠️ Cache invalidation returned status: {response.status_code}")
+                return False
+                
+    except httpx.TimeoutException:
+        logger.error("❌ Cache invalidation timeout")
+        return False
+    except httpx.ConnectError:
+        logger.error("❌ Cannot connect to Core Service")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Cache invalidation failed: {e}")
+        return False
 
 logger.info(f"Connecting to database: {DB_HOST}:{DB_PORT}/{DB_NAME}")
 
@@ -244,11 +279,11 @@ async def lifespan(app: FastAPI):
 
 # --- 4. FastAPI App Initialization and Endpoint ---
 
-app = FastAPI(lifespan=lifespan, title="Health Insurance Service")
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Allow your frontend
+    allow_origins=["*"],  # Allow your frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -363,6 +398,9 @@ async def post_health_insurance_contract(contract_data: ContractRequest, db: Ses
         logger.info(f'Contract created successfully. Contract ID: {new_contract.id}')
         
         # 🎯 PUBLISH KAFKA EVENT
+        cache_invalidated = await invalidate_cache_via_core_service()
+        if not cache_invalidated:
+            logger.warning("⚠️ Cache invalidation failed but contract was saved")
         await publish_contract_event(
             event_type="contract_created",
             user_id=user_id,
@@ -401,19 +439,27 @@ async def delete_health_insurance_contract(user_id: int, widget_id: str, db: Ses
         contract = db.scalars(stmt).first()
         
         if contract:
+            contract_id = contract.id
             db.delete(contract)
             db.commit()
             logger.info(f'Contract deleted successfully for user {user_id}, widget {widget_id}')
             
-            # 🎯 PUBLISH KAFKA EVENT
+            # 🔥 STEP 1: SYNC cache invalidation (Option 3)
+            cache_invalidated = await invalidate_cache_via_core_service()
+            if not cache_invalidated:
+                logger.warning("⚠️ Cache invalidation failed but contract was deleted")
+            
+            # 🔥 STEP 2: ASYNC Kafka event (for SSE notifications)
             await publish_contract_event(
                 event_type="contract_deleted",
                 user_id=user_id,
-                widget_id=widget_id
+                widget_id=widget_id,
+                contract_id=contract_id
             )
             
             return {
                 "message": "Contract deleted successfully",
+                "contract_id": contract_id,
                 "user_id": user_id,
                 "widget_id": widget_id
             }
@@ -432,7 +478,7 @@ async def delete_health_insurance_contract(user_id: int, widget_id: str, db: Ses
         )
     
 @app.get("/widget/health-insurance/contract/{user_id}")
-def get_car_insurance_contracts(user_id: int, db: Session = Depends(get_db)):
+def get_health_insurance_contracts(user_id: int, db: Session = Depends(get_db)):
     """
     Endpoint to retrieve health contracts for a given user.
     """

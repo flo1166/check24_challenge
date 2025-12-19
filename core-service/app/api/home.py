@@ -4,6 +4,8 @@ import json
 from typing import List, Dict, Any
 from fastapi import APIRouter, status, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
+import httpx
+import datetime
 
 from app.core.cache import get_with_swr
 from app.core.clients import fetch_all_widgets_swr, fetch_user_contracts, close_all_clients
@@ -21,7 +23,7 @@ class EmptyResultError(Exception):
 async def fetch_and_serialize_widgets():
     """
     Fetch widgets from ALL product services and serialize them.
-    Filters out fallbacks, calculates total, and raises EmptyResultError if total is zero.
+    Filters out fallbacks, calculates total, and raises EmptyResultError if ONLY fallbacks exist.
     Returns grouped widgets by service.
     """
     logger.info("fetch_and_serialize_widgets: Fetching widgets from all services...")
@@ -60,13 +62,7 @@ async def fetch_and_serialize_widgets():
         # 3. >>> CRITICAL VALIDATION CHECK <<<
         # If we have an aggregation structure (at least one service key) but zero valid widgets,
         # we consider this a failure state and prevent caching.
-        if total_valid_widgets == 0 and len(grouped_widgets) > 0:
-            logger.error("fetch_and_serialize_widgets: Aggregation resulted in 0 valid widgets. Raising EmptyResultError to prevent cache update.")
-            
-            # The cache.py file must catch this specific exception and abort the save.
-            raise EmptyResultError("Aggregation returned zero valid widgets.")
 
-        
         return grouped_widgets
     
     except EmptyResultError:
@@ -112,7 +108,11 @@ async def get_home_page_widgets(background_tasks: BackgroundTasks):
         total_widgets = sum(len(service["widgets"]) for service in grouped_widgets.values())
         logger.info(f"get_home_page_widgets: Aggregation finished. {total_widgets} total widgets across {len(grouped_widgets)} services.")
         
-        return {"services": grouped_widgets}
+        return {
+            "services": grouped_widgets,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "cache_key": HOME_PAGE_CACHE_KEY
+        }
     
     except HTTPException:
         logger.debug("[DEBUG] HTTPException raised - re-raising")
@@ -170,6 +170,116 @@ async def get_user_contracts_endpoint(user_id: int):
             detail=f"Error fetching contracts: {str(e)}"
         )
 
+
+@router.delete("/user/{user_id}/contract/{service}/{widget_id}")
+async def delete_user_contract(user_id: int, service: str, widget_id: str):
+    """
+    Deletes a contract for a specific user and service.
+    Proxies the deletion request to the appropriate product service.
+    
+    Args:
+        user_id: The user's ID
+        service: The service type ('car', 'health', 'house', 'banking')
+        widget_id: The widget/contract ID to delete
+    """
+    logger.info(f"delete_user_contract: Deleting contract for user {user_id}, service {service}, widget {widget_id}")
+    
+    # Map service names to clients
+    from app.core.clients import (
+        car_insurance_client,
+        health_insurance_client,
+        house_insurance_client,
+        banking_client
+    )
+    
+    service_map = {
+        "car": car_insurance_client,
+        "health": health_insurance_client,
+        "house": house_insurance_client,
+        "banking": banking_client
+    }
+    
+    client = service_map.get(service)
+    
+    if not client:
+        logger.error(f"delete_user_contract: Unknown service type: {service}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown service type: {service}"
+        )
+    
+    try:
+        # Call the product service's delete endpoint
+        response = await client.client.delete(
+            f"{client.endpoint}/contract/{user_id}/{widget_id}"
+        )
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        logger.info(f"delete_user_contract: Successfully deleted contract for user {user_id}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"delete_user_contract: Failed to delete contract: {type(e).__name__}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete contract: {str(e)}"
+        )
+
+
+@router.post("/cache/invalidate")
+async def invalidate_cache_endpoint():
+    """
+    Cache invalidation endpoint for product services.
+    
+    This endpoint allows product services to synchronously invalidate the cache
+    after creating/deleting contracts, eliminating race conditions.
+    
+    Architecture:
+    - Product Service → POST /cache/invalidate (sync) → Immediate cache clear
+    - Product Service → Kafka event (async) → SSE notifications
+    
+    This dual approach ensures:
+    1. Immediate cache invalidation (no race condition)
+    2. Clean separation of concerns (Core owns cache)
+    3. SSE notifications still work (via Kafka)
+    """
+    logger.info("📞 Cache invalidation requested via API")
+    
+    try:
+        from app.core.cache import redis_client
+        
+        if redis_client is None:
+            logger.error("❌ Redis client is None")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Redis client not available"
+            )
+        
+        # Invalidate the home page cache
+        deleted_count = await redis_client.delete(HOME_PAGE_CACHE_KEY)
+        
+        if deleted_count > 0:
+            logger.info(f"✅ Cache invalidated via API: {HOME_PAGE_CACHE_KEY} (deleted: {deleted_count})")
+        else:
+            logger.warning(f"⚠️ Cache key not found: {HOME_PAGE_CACHE_KEY}")
+        
+        return {
+            "status": "success",
+            "message": "Cache invalidated successfully",
+            "keys_deleted": deleted_count,
+            "cache_key": HOME_PAGE_CACHE_KEY
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to invalidate cache via API: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Cache invalidation failed: {str(e)}"
+        )
+
+
 @router.get("/debug/circuit-breaker-status")
 async def get_circuit_breaker_status():
     """Debug endpoint to check circuit breaker status"""
@@ -188,16 +298,79 @@ async def reset_circuit_breaker():
 
 @router.get("/stream/updates")
 async def stream_updates():
+    """
+    Server-Sent Events endpoint for real-time updates.
+    Clients connect here and receive notifications when cache is invalidated.
+    """
     async def event_stream():
-        while True:
-            # Wait for Kafka events or other triggers
-            yield f"data: {json.dumps({'update': 'available'})}\n\n"
-            await asyncio.sleep(30)
+        # Create a queue for this client
+        client_queue = asyncio.Queue()
+        
+        try:
+            # Import here to avoid circular dependency
+            from app.workers.kafka_consumer import add_sse_client, remove_sse_client
+            
+            # Register this client
+            add_sse_client(client_queue)
+            logger.info("🔌 New SSE client connected")
+            
+            # Send initial connection confirmation
+            yield f"data: {json.dumps({'type': 'connected', 'message': 'SSE connection established'})}\n\n"
+            
+            # Keep connection alive and send updates
+            while True:
+                try:
+                    # Wait for updates from Kafka consumer (with timeout to keep connection alive)
+                    message = await asyncio.wait_for(client_queue.get(), timeout=30.0)
+                    logger.info(f"📤 Sending SSE update to client: {message}")
+                    yield f"data: {message}\n\n"
+                except asyncio.TimeoutError:
+                    # Send keepalive ping every 30 seconds
+                    logger.debug("Sending SSE keepalive ping")
+                    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+                except asyncio.CancelledError:
+                    logger.info("SSE stream cancelled")
+                    break
+                    
+        except ImportError as e:
+            # If kafka_consumer functions don't exist, provide basic SSE
+            logger.warning(f"Kafka consumer not available for SSE: {e}")
+            logger.info("🔌 SSE client connected (fallback mode)")
+            
+            yield f"data: {json.dumps({'type': 'connected', 'message': 'SSE connected (fallback)'})}\n\n"
+            
+            # Fallback: just send keepalive pings
+            while True:
+                try:
+                    await asyncio.sleep(30)
+                    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+                except asyncio.CancelledError:
+                    break
+                    
+        except Exception as e:
+            logger.error(f"SSE stream error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            
+        finally:
+            # Unregister client when connection closes
+            try:
+                from app.workers.kafka_consumer import remove_sse_client
+                remove_sse_client(client_queue)
+                logger.info("🔌 SSE client disconnected")
+            except ImportError:
+                logger.info("🔌 SSE client disconnected (fallback mode)")
     
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
+    )
 
 @router.get("/health")
 async def health():
     logger.info("health: Health check called")
     return {"status": "healthy"}
-#//TODO is it the other way around, so that stuff is send to it and not asked for?

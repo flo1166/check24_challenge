@@ -20,11 +20,7 @@ import WidgetSection from '../components/widgets/WidgetSection';
 const COLLAPSE_STATE_KEY = 'widgetSectionCollapseState';
 
 export default function HomePage({ data, loading, error, onRetry }) {
-  const { updateNotification, notifications } = useNotifications();
-  const [selectedCarInsurance, setSelectedCarInsurance] = useState(null);
-  const [selectedHealthInsurance, setSelectedHealthInsurance] = useState(null);
-  const [selectedHouseInsurance, setSelectedHouseInsurance] = useState(null);
-  const [selectedBankingProduct, setSelectedBankingProduct] = useState(null);
+  const { notifications } = useNotifications();
   
   // NEW STATE: Map of serviceKey -> isCollapsed (boolean)
   const [collapsedSections, setCollapsedSections] = useState({});
@@ -72,11 +68,8 @@ export default function HomePage({ data, loading, error, onRetry }) {
   /**
    * Handler factory for adding products to cart by service
    */
-  const createAddToCartHandler = (serviceKey, apiPort, setState) => {
+  const createAddToCartHandler = (serviceKey, apiPort) => {
     return async (widgetData) => {
-      // 1. Update UI first (instant)
-      setState(widgetData);
-      
       const userId = 123; // TODO: Get from auth context
       const apiUrl = `http://localhost:${apiPort}/widget/${serviceKey}/contract`;
       
@@ -86,30 +79,42 @@ export default function HomePage({ data, loading, error, onRetry }) {
       };
 
       try {
-        // 2. Save to database
+        console.log(`🛒 Adding ${serviceKey} to cart...`);
+        
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
           },
           body: JSON.stringify(payload),
         });
         
+        if (!response.ok) {
+          throw new Error(`Failed to create contract: ${response.statusText}`);
+        }
+        
         const result = await response.json();
-        console.log(`Contract created for ${serviceKey} with ID:`, result.contract_id);
+        console.log(`✅ Contract created for ${serviceKey}:`, result.contract_id);
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+        console.log('📢 [HomePage] Dispatching contracts-updated event');
+        window.dispatchEvent(new Event('contracts-updated'));
+
+        console.log('📢 [HomePage] Dispatching widgets-updated event');
+        window.dispatchEvent(new Event('widgets-updated'));
+                
       } catch (error) {
-        console.error(`Failed to save ${serviceKey} contract:`, error);
+        console.error(`❌ Failed to save ${serviceKey} contract:`, error);
+        // TODO: Show error toast to user
       }
     };
   };
 
   // Create handlers for each service
-  const handleCarInsuranceAdded = createAddToCartHandler('car-insurance', 8001, setSelectedCarInsurance);
-  const handleHealthInsuranceAdded = createAddToCartHandler('health-insurance', 8002, setSelectedHealthInsurance);
-  const handleHouseInsuranceAdded = createAddToCartHandler('house-insurance', 8003, setSelectedHouseInsurance);
-  const handleBankingAdded = createAddToCartHandler('banking', 8004, setSelectedBankingProduct);
+  const handleCarInsuranceAdded = createAddToCartHandler('car-insurance', 8001);
+  const handleHealthInsuranceAdded = createAddToCartHandler('health-insurance', 8002);
+  const handleHouseInsuranceAdded = createAddToCartHandler('house-insurance', 8003);
+  const handleBankingAdded = createAddToCartHandler('banking', 8004);
 
   /**
    * Check if any service has valid widgets (not just fallback)
@@ -179,10 +184,6 @@ export default function HomePage({ data, loading, error, onRetry }) {
       <section className="mb-16">
         <InsuranceCentre 
           cartCount={notifications.cart} 
-          selectedCarInsurance={selectedCarInsurance}
-          selectedHealthInsurance={selectedHealthInsurance}
-          selectedHouseInsurance={selectedHouseInsurance}
-          selectedBankingProduct={selectedBankingProduct}
         />
       </section>
 

@@ -3,6 +3,8 @@ import logging
 import asyncio
 from aiokafka import AIOKafkaConsumer
 import os
+from typing import Set
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 logging.getLogger("aiokafka").setLevel(logging.INFO)
@@ -19,11 +21,57 @@ KAFKA_TOPICS = [
 
 CACHE_KEY_PREFIX = "sdui:home_page:v1"
 
+# Global set to track connected SSE clients
+sse_clients: Set[asyncio.Queue] = set()
+
+
+def add_sse_client(queue: asyncio.Queue):
+    """Register a new SSE client"""
+    sse_clients.add(queue)
+    logger.info(f"➕ New SSE client connected. Total clients: {len(sse_clients)}")
+
+
+def remove_sse_client(queue: asyncio.Queue):
+    """Unregister an SSE client"""
+    sse_clients.discard(queue)
+    logger.info(f"➖ SSE client disconnected. Total clients: {len(sse_clients)}")
+
+
+async def notify_sse_clients(event_data: dict):
+    """Send update notification to all connected SSE clients"""
+    if not sse_clients:
+        logger.debug("No SSE clients connected, skipping notification")
+        return
+    
+    logger.info(f"📢 Notifying {len(sse_clients)} SSE client(s) of cache update")
+    
+    # Create notification message
+    message = {
+        "type": "cache_invalidated",
+        "timestamp": datetime.now().isoformat(),
+        "reason": event_data.get("event_type"),
+        "user_id": event_data.get("user_id"),
+        "service": event_data.get("service", "unknown")
+    }
+    
+    # Send to all connected clients
+    disconnected_clients = set()
+    for client_queue in sse_clients:
+        try:
+            await client_queue.put(json.dumps(message))
+        except Exception as e:
+            logger.error(f"Failed to send to SSE client: {e}")
+            disconnected_clients.add(client_queue)
+    
+    # Clean up disconnected clients
+    for client in disconnected_clients:
+        remove_sse_client(client)
+
 
 async def consume_and_invalidate_cache():
     """
     Asynchronous Kafka Consumer that listens to ALL product service topics.
-    Listens for contract creation/deletion events and invalidates the Redis cache.
+    Listens for contract creation/deletion events, invalidates cache, and notifies SSE clients.
     """
     consumer = AIOKafkaConsumer(
         *KAFKA_TOPICS,  # Subscribe to all topics
@@ -67,19 +115,24 @@ async def consume_and_invalidate_cache():
             
             # Determine service type from topic
             if "car.insurance" in topic:
-                service = "Car Insurance"
+                service = "car_insurance"
+                service_display = "Car Insurance"
             elif "health.insurance" in topic:
-                service = "Health Insurance"
+                service = "health_insurance"
+                service_display = "Health Insurance"
             elif "house.insurance" in topic:
-                service = "House Insurance"
+                service = "house_insurance"
+                service_display = "House Insurance"
             elif "banking" in topic:
-                service = "Banking"
+                service = "banking"
+                service_display = "Banking"
             else:
-                service = "Unknown"
+                service = "unknown"
+                service_display = "Unknown"
             
             # Handle contract creation/deletion
             if event_type in ["contract_created", "contract_deleted"]:
-                logger.info(f"Processing {event_type} for {service}: user {user_id}, widget {widget_id}")
+                logger.info(f"Processing {event_type} for {service_display}: user {user_id}, widget {widget_id}")
                 
                 try:
                     # Import redis_client at runtime
@@ -94,10 +147,14 @@ async def consume_and_invalidate_cache():
                     
                     if deleted_count > 0:
                         logger.info(f"🗑️ Successfully invalidated cache key: {CACHE_KEY_PREFIX}")
-                        logger.info(f"   Reason: {event_type} in {service} for user {user_id}")
+                        logger.info(f"   Reason: {event_type} in {service_display} for user {user_id}")
                     else:
                         logger.warning(f"⚠️ Cache key not found for deletion: {CACHE_KEY_PREFIX}")
                         logger.info("This is normal if cache was already expired or empty")
+                    
+                    # 🔥 NEW: Notify all connected SSE clients to refetch data
+                    event_with_service = {**event, "service": service}
+                    await notify_sse_clients(event_with_service)
                     
                 except Exception as e:
                     logger.error(f"❌ Failed to invalidate cache: {type(e).__name__}: {e}", exc_info=True)
@@ -112,18 +169,3 @@ async def consume_and_invalidate_cache():
         # Stop the Consumer
         await consumer.stop()
         logger.info("AIOKafka Consumer stopped.")
-
-# NOTE: This function is scheduled in core-service/app/main.py 
-# using the FastAPI Lifespan context manager.
-
-# NOTE: This function is scheduled in core-service/app/main.py 
-# using the FastAPI Lifespan context manager.
-
-# NOTE: This function is scheduled in core-service/app/main.py 
-# using the FastAPI Lifespan context manager.
-
-# NOTE: This function is scheduled in core-service/app/main.py 
-# using the FastAPI Lifespan context manager.
-
-# NOTE: This function needs to be scheduled in core-service/app/main.py 
-# using asyncio.create_task or similar, or better, via the FastAPI Lifespan.
