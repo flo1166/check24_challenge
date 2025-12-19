@@ -88,7 +88,7 @@ services:
       POSTGRES_DB: car_insurance_db
     volumes:
       - car_db_data:/var/lib/postgresql/data
-      - ./mock-product-service/db_init:/docker-entrypoint-initdb.d
+      - ./car-insurance-service/db_init:/docker-entrypoint-initdb.d
     networks:
       - check24-network
 
@@ -159,11 +159,11 @@ services:
   # PRODUCT SERVICES
   # ============================================================
   
-  mock-product-service:
+  car-insurance-service:
     build: 
-      context: ./mock-product-service
+      context: ./car-insurance-service
       dockerfile: Dockerfile
-    container_name: mock-product-service
+    container_name: car-insurance-service
     ports:
       - "8001:8000"
     restart: always
@@ -177,8 +177,8 @@ services:
       - product-db-car
       - kafka
     volumes:
-      - ./mock-product-service/app:/app/app
-      - ./mock-product-service/logs:/app/logs
+      - ./car-insurance-service/app:/app/app
+      - ./car-insurance-service/logs:/app/logs
     networks:
       - check24-network
 
@@ -264,11 +264,10 @@ services:
       - "8000:8000"
     restart: always
     environment:
-      CAR_INSURANCE_SERVICE_URL: http://mock-product-service:8000
+      CAR_INSURANCE_SERVICE_URL: http://car-insurance-service:8000
       HEALTH_INSURANCE_SERVICE_URL: http://health-insurance-service:8000
       HOUSE_INSURANCE_SERVICE_URL: http://house-insurance-service:8000
       BANKING_SERVICE_URL: http://banking-service:8000
-      MOCK_PRODUCT_SERVICE_URL: http://mock-product-service:8000
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
@@ -282,7 +281,7 @@ services:
       - ./core-service/logs:/app/logs
       - ./web-client/src/assets:/app/assets:ro
     depends_on:
-      - mock-product-service
+      - car-insurance-service
       - health-insurance-service
       - house-insurance-service
       - banking-service
