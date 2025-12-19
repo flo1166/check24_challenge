@@ -1,10 +1,17 @@
-# ===== LOGGING MUST BE CONFIGURED FIRST =====
+##################################
+### main.py of car-insurance-service ###
+##################################
+"This enables a FastAPI server for the car-insurance-service microservice."
+
+###############
+### Imports ###
+###############
+
 from logging.config import dictConfig
 from app.core.logging_config import LOGGING_CONFIG
 
 dictConfig(LOGGING_CONFIG)
 
-# ===== NOW IMPORT THE REST =====
 import logging
 import os
 import asyncio
@@ -12,19 +19,22 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, String, Integer
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import create_engine, select, func
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session
-from sqlalchemy import select, func
-from sqlalchemy.dialects.postgresql import JSONB
-from pydantic import BaseModel
+
 from aiokafka import AIOKafkaProducer
 from aiokafka.errors import KafkaError
 import json
 import httpx
 
+from app.core.models import Widget, Contracts, ContractRequest
+
 logger = logging.getLogger(__name__)
+
+##############################################
+### Configurations / Environment Variables ###
+##############################################
 
 # --- Kafka Configuration ---
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9093")
@@ -44,6 +54,10 @@ SQLALCHEMY_DATABASE_URL = (
 )
 
 CORE_SERVICE_URL = os.getenv("CORE_SERVICE_URL", "http://core-service:8000")
+
+######################
+### Cache Handling ###
+######################
 
 async def invalidate_cache_via_core_service():
     """
@@ -77,6 +91,10 @@ async def invalidate_cache_via_core_service():
         logger.error(f"❌ Cache invalidation failed: {e}")
         return False
 
+#####################
+### DB Connection ###
+#####################
+
 logger.info(f"Connecting to database: {DB_HOST}:{DB_PORT}/{DB_NAME}")
 
 engine = create_engine(
@@ -87,46 +105,6 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# --- 2. SQLAlchemy ORM Model (KEPT) ---
-
-class Widget(Base):
-    """
-    SQLAlchemy model reflecting the new, simplified database structure.
-    It now uses JSONB for the dynamic data field.
-    """
-    __tablename__ = "widgets"
-
-    user_id = Column(Integer, index=True) 
-    widget_id = Column(String(100), primary_key=True)
-    component_type = Column(String(50), index=True)
-    priority = Column(Integer, default=0)
-    data = Column(JSONB, nullable=False) # Maps to the JSONB column in the DB
-    
-    def to_sdui_format(self):
-        """Converts the ORM object to the required Widget Pydantic model dictionary format."""
-        return {
-            "widget_id": self.widget_id,
-            "component_type": self.component_type,
-            "data": self.data, # This is the dynamic dictionary from the JSONB field
-            "priority": self.priority
-        }
-
-class Contracts(Base):
-    """
-    SQLAlchemy model reflecting the new, simplified database structure.
-    It now uses JSONB for the dynamic data field.
-    """
-    __tablename__ = "contracts"
-
-    user_id = Column(Integer) 
-    widget_id = Column(String(100))
-    id = Column(Integer, primary_key=True, autoincrement=True)
-
-class ContractRequest(BaseModel):
-    user_id: int
-    widget_id: str
-
-# --- 3. FastAPI Dependency for Database Session (KEPT) ---
 def get_db():
     """Dependency that yields a database session and ensures it's closed."""
     db = None # Initialize db to None
@@ -146,7 +124,9 @@ def get_db():
         if db:
             db.close()
 
-# --- Kafka Producer Functions ---
+#############
+### Kafka ###
+#############
 
 async def init_kafka_producer():
     """Initialize the Kafka producer on application startup."""
@@ -178,7 +158,6 @@ async def init_kafka_producer():
                 
     except Exception as e:
         logger.error(f"Failed to initialize Kafka Producer: {e}")
-
 
 async def publish_contract_event(event_type: str, user_id: int, widget_id: str, contract_id: int = None):
     """
@@ -217,7 +196,6 @@ async def publish_contract_event(event_type: str, user_id: int, widget_id: str, 
     except Exception as e:
         logger.error(f"❌ Unexpected error publishing event: {e}")
 
-
 async def close_kafka_producer():
     """Close the Kafka producer on application shutdown."""
     global kafka_producer
@@ -229,8 +207,9 @@ async def close_kafka_producer():
         except Exception as e:
             logger.error(f"Error stopping Kafka Producer: {e}")
 
-
-# --- Lifespan Context Manager ---
+###############
+### FASTAPI ###
+###############
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -276,31 +255,36 @@ async def lifespan(app: FastAPI):
     logger.info("✅ Mock Product Service shutdown complete")
     logger.info("=" * 60)
 
-
-# --- 4. FastAPI App Initialization and Endpoint ---
-
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow your frontend
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+##############
+### Routes ###
+##############
+
 @app.get("/")
 def read_root():
-    """Returns a simple message confirming the service is running."""
+    """
+    Returns a simple message confirming the service is running.
+    """
     logger.info("Root endpoint called")
     return {"message": "Mock Product Service is running. Try /health or /widget/car-insurance"}
 
 # Health Check 
 @app.get("/health")
 def health_check():
+    """
+    Additonal manual health check.
+    """
     logger.info("Health check endpoint called")
     return {"status": "ok"}
-
 
 @app.get("/widget/car-insurance")
 def get_car_insurance_widget(db: Session = Depends(get_db)):
@@ -312,7 +296,7 @@ def get_car_insurance_widget(db: Session = Depends(get_db)):
     logger.info('API call: /widget/car-insurance starts')
     
     try:
-        # Get user_id (hardcoded for now, should come from auth)
+        # user_id is hardcoded for demo purposes
         user_id = 123
         
         # Check if user has ANY contracts
@@ -327,7 +311,7 @@ def get_car_insurance_widget(db: Session = Depends(get_db)):
             logger.info('User has contract - returning NO widgets (empty list)')
             return {"widgets": []}
         
-        # User has no contract - return random Card widgets
+        # Return widgets
         logger.info('User has no contract - returning random Card widgets')
         stmt = (
             select(Widget)
@@ -380,10 +364,12 @@ def get_car_insurance_widget_by_id(widget_id: str, db: Session = Depends(get_db)
 @app.post("/widget/car-insurance/contract")
 async def post_car_insurance_contract(contract_data: ContractRequest, db: Session = Depends(get_db)):
     """
-    Endpoint to create a contract.
-    DUAL APPROACH (Option 3):
-    1. Invalidates cache via Core Service (SYNC) ← Immediate
-    2. Publishes Kafka event (ASYNC) ← For SSE notifications
+    This endpoint creates a contract for a given user and widget.
+    
+    :param contract_data: data of the contract
+    :type contract_data: ContractRequest
+    :param db: database session
+    :type db: Session
     """
     user_id = contract_data.user_id
     widget_id = contract_data.widget_id
@@ -399,12 +385,12 @@ async def post_car_insurance_contract(contract_data: ContractRequest, db: Sessio
         
         logger.info(f'Contract created successfully. Contract ID: {new_contract.id}')
         
-        # 🔥 STEP 1: SYNC cache invalidation (Option 3)
+        # SYNC cache invalidation (Option 3)
         cache_invalidated = await invalidate_cache_via_core_service()
         if not cache_invalidated:
             logger.warning("⚠️ Cache invalidation failed but contract was saved")
         
-        # 🔥 STEP 2: ASYNC Kafka event (for SSE notifications)
+        # ASYNC Kafka event (for SSE notifications)
         await publish_contract_event(
             event_type="contract_created",
             user_id=user_id,
@@ -430,7 +416,7 @@ async def post_car_insurance_contract(contract_data: ContractRequest, db: Sessio
 async def delete_car_insurance_contract(user_id: int, widget_id: str, db: Session = Depends(get_db)):
     """
     Endpoint to delete a contract.
-    DUAL APPROACH (Option 3):
+    DUAL APPROACH:
     1. Invalidates cache via Core Service (SYNC) ← Immediate
     2. Publishes Kafka event (ASYNC) ← For SSE notifications
     """
@@ -451,12 +437,12 @@ async def delete_car_insurance_contract(user_id: int, widget_id: str, db: Sessio
             db.commit()
             logger.info(f'Contract deleted successfully: id={contract_id}, user={user_id}, widget={widget_id}')
             
-            # 🔥 STEP 1: SYNC cache invalidation (Option 3)
+            # SYNC cache invalidation (Option 3)
             cache_invalidated = await invalidate_cache_via_core_service()
             if not cache_invalidated:
                 logger.warning("⚠️ Cache invalidation failed but contract was deleted")
             
-            # 🔥 STEP 2: ASYNC Kafka event (for SSE notifications)
+            # ASYNC Kafka event (for SSE notifications)
             await publish_contract_event(
                 event_type="contract_deleted",
                 user_id=user_id,
@@ -486,9 +472,14 @@ async def delete_car_insurance_contract(user_id: int, widget_id: str, db: Sessio
     
 @app.get("/widget/car-insurance/contract/{user_id}")
 def get_car_insurance_contracts(user_id: int, db: Session = Depends(get_db)):
-    """
-    Endpoint to retrieve car contracts for a given user.
-    """
+    '''
+    This endpoint searches for contracts of a given user.
+    
+    :param user_id: user ID to search for
+    :type user_id: int
+    :param db: db session
+    :type db: Session
+    '''
     logger.info(f'API call: /widget/car-insurance/contract/{user_id} starts')
     
     try:
@@ -519,18 +510,7 @@ def get_car_insurance_contracts(user_id: int, db: Session = Depends(get_db)):
             detail="Could not retrieve contract widget data from product service database (DB Connection Error)."
         )
 
-
 if __name__ == "__main__":
     import uvicorn
     logger.info("Starting Mock Product Service with Uvicorn...")
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8001,  # Different port from core-service
-        log_level="info"
-    )
-
-'''
-//TODO: delete comment + mock data + base model centralized? + set user_id at the end
-Now, you will set up the FastAPI application and implement the core endpoint with the crucial failure simulation logic.
-'''
+    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")

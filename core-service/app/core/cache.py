@@ -1,3 +1,12 @@
+################
+### cache.py ###
+################
+"This enables caching of widgets."
+
+###############
+### Imports ###
+###############
+
 import redis.asyncio as redis
 import json
 import os
@@ -6,21 +15,20 @@ from typing import Callable, Any
 from fastapi import BackgroundTasks, HTTPException, status
 import logging
 
-# Assuming EmptyResultError is defined in a shared file or home.py
-# Adjust this import path as necessary for your project structure
 try:
     from app.api.home import EmptyResultError
 except ImportError:
     # Define a temporary placeholder if the exact path is unknown
     class EmptyResultError(Exception): pass
 
-
 logger = logging.getLogger(__name__)
 
-# Global asynchronous client
 redis_client: redis.Redis = None 
 
-# --- CONFIG ---
+##############################################
+### Configurations / Environment Variables ###
+##############################################
+
 TTL = timedelta(hours=1)
 SWR_GRACE_PERIOD = timedelta(minutes=5) 
 REFRESH_FLAG_SUFFIX = ":is_refreshing"
@@ -30,8 +38,14 @@ REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 REDIS_DB = int(os.getenv("REDIS_DB", 0))
 
+#############
+### Redis ###
+#############
+
 async def init_redis_client():
-    """Initializes the asynchronous Redis client."""
+    """
+    Initializes the asynchronous Redis client.
+    """
     global redis_client
     try:
         redis_client = redis.Redis(
@@ -50,7 +64,9 @@ async def init_redis_client():
         raise
 
 async def _revalidate_and_update(key: str, fetch_function: Callable[[], Any]):
-    """Background task to fetch fresh data and update the cache."""
+    """
+    Background task to fetch fresh data and update the cache.
+    """
     refresh_flag_key = key + REFRESH_FLAG_SUFFIX
     
     # Use SET NX (Not eXist) to ensure only one refresh task runs
@@ -79,8 +95,9 @@ async def _revalidate_and_update(key: str, fetch_function: Callable[[], Any]):
         logger.debug(f"Revalidation for {key} is already in progress. Skipping.")
 
 async def get_with_swr(key: str, fetch_function: Callable[[], Any], background_tasks: BackgroundTasks):
-    """SWR logic implementation (Asynchronous)."""
-    
+    """
+    SWR logic implementation (Asynchronous).
+    """
     pipe = redis_client.pipeline()
     pipe.get(key)
     pipe.ttl(key)
@@ -143,7 +160,9 @@ async def get_with_swr(key: str, fetch_function: Callable[[], Any], background_t
         )
 
 async def close_redis_client():
-    """Closes the Redis connection."""
+    """
+    Closes the Redis connection.
+    """
     global redis_client
     if redis_client:
         await redis_client.close()

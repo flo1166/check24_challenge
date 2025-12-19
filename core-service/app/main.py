@@ -1,21 +1,27 @@
-# ===== LOGGING MUST BE CONFIGURED FIRST =====
+###############################
+### main.py of core-service ###
+###############################
+"This enables a FastAPI server for the core-service."
+
+###############
+### Imports ###
+###############
+
 from logging.config import dictConfig
 from app.core.logging_config import LOGGING_CONFIG
-from pathlib import Path
 
 dictConfig(LOGGING_CONFIG)
 
-# ===== NOW IMPORT THE REST =====
+from pathlib import Path
 import asyncio
 import logging
-import sys
 from typing import Set, Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import os
 from app.api import home
+
 from app.core.cache import init_redis_client, close_redis_client
 from app.core.clients import (
     car_insurance_client,
@@ -27,14 +33,13 @@ from app.workers.kafka_consumer import consume_and_invalidate_cache
 
 logger = logging.getLogger(__name__)
 
-# Type hints for better clarity
 background_tasks: Set[asyncio.Task] = set()
 kafka_consumer_task: Optional[asyncio.Task] = None
 
 async def wait_for_services():
-    """Wait for dependent services to be ready"""
-    import asyncio
-    
+    """
+    Wait for dependent services to be ready
+    """
     logger.info("Waiting for dependent services...")
     
     # Wait for all product services to be ready
@@ -64,10 +69,17 @@ async def wait_for_services():
     # Small additional delay for database connections to stabilize
     await asyncio.sleep(1)
 
+###############
+### FASTAPI ###
+###############
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Handles the application startup and shutdown events using asyncio for all background tasks.
+    This function handles startup and shutdown of the FastAPI.
+    
+    :param app: The Fast API object
+    :type app: FastAPI
     """
     global kafka_consumer_task
     
@@ -75,21 +87,17 @@ async def lifespan(app: FastAPI):
     logger.info("Application starting up: Initializing dependencies...")
     logger.info("=" * 60)
     
-    # WAIT FOR SERVICES TO BE READY
     await wait_for_services()
     
     try:
-        # 1. Initialize Async Redis Client
         logger.info("Initializing Redis client...")
         await init_redis_client()
         logger.info("✓ Redis client initialized successfully")
         
     except Exception as e:
         logger.warning(f"⚠ Redis initialization warning: {type(e).__name__}: {e}")
-        # Continue anyway; Redis might be unavailable in local dev, but app can still work
     
     try:
-        # 2. Start the Async Kafka Consumer as a non-blocking background task
         logger.info("Starting Kafka Consumer as background task...")
         kafka_consumer_task = asyncio.create_task(consume_and_invalidate_cache())
         background_tasks.add(kafka_consumer_task)
@@ -98,29 +106,24 @@ async def lifespan(app: FastAPI):
         
     except Exception as e:
         logger.warning(f"⚠ Kafka Consumer warning: {type(e).__name__}: {e}")
-        # Continue; Kafka is optional for local development
     
     logger.info("=" * 60)
     logger.info("✓ Application ready to accept requests")
     logger.info("=" * 60)
     
-    yield  # <-- Application starts accepting requests here
+    yield 
     
-    # --- SHUTDOWN ---
     logger.info("=" * 60)
     logger.info("Application shutting down: Gracefully stopping services...")
     logger.info("=" * 60)
     
     try:
-        # 1. Cancel the Kafka Consumer Task
         if kafka_consumer_task and not kafka_consumer_task.done():
             logger.info("Canceling Kafka Consumer task...")
             kafka_consumer_task.cancel()
-            # Wait for the consumer to gracefully stop
             await asyncio.gather(kafka_consumer_task, return_exceptions=True)
             logger.info("✓ Kafka Consumer task stopped")
         
-        # 2. Close HTTPX Clients (Circuit Breaker protected clients)
         logger.info("Closing Product Service HTTP clients...")
         await car_insurance_client.close()
         await health_insurance_client.close()
@@ -128,7 +131,6 @@ async def lifespan(app: FastAPI):
         await banking_client.close()
         logger.info("✓ Product Service HTTP clients closed")
         
-        # 3. Close Async Redis Client
         logger.info("Closing Redis client...")
         await close_redis_client()
         logger.info("✓ Redis client closed")
@@ -156,14 +158,16 @@ app.add_middleware(
 
 app.include_router(home.router)
 
-ASSETS_PATH = Path("/app/assets")  # Simple path inside container
+ASSETS_PATH = Path("/app/assets")
 
 if ASSETS_PATH.exists():
     app.mount("/assets", StaticFiles(directory=str(ASSETS_PATH)), name="assets")
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for monitoring."""
+    """
+    Health check endpoint for monitoring.
+    """
     logger.debug("Health check called")
     return {"status": "healthy", "service": "check24-widget-platform"}
 

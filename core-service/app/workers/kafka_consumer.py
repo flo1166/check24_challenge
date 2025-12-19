@@ -1,3 +1,12 @@
+#########################
+### kafka_consumer.py ###
+#########################
+"This enables events to invalidate redis cache."
+
+###############
+### Imports ###
+###############
+
 import json
 import logging
 import asyncio
@@ -9,9 +18,12 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 logging.getLogger("aiokafka").setLevel(logging.INFO)
 
+##############################################
+### Configurations / Environment Variables ###
+##############################################
+
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:9093")
 
-# All Kafka topics
 KAFKA_TOPICS = [
     "user.car.insurance.purchased",
     "user.health.insurance.purchased",
@@ -21,24 +33,32 @@ KAFKA_TOPICS = [
 
 CACHE_KEY_PREFIX = "sdui:home_page:v1"
 
-# Global set to track connected SSE clients
+##################
+### SSE Client ###
+##################
+
 sse_clients: Set[asyncio.Queue] = set()
 
-
 def add_sse_client(queue: asyncio.Queue):
-    """Register a new SSE client"""
+    """
+    Register a new SSE client
+    """
     sse_clients.add(queue)
     logger.info(f"➕ New SSE client connected. Total clients: {len(sse_clients)}")
 
 
 def remove_sse_client(queue: asyncio.Queue):
-    """Unregister an SSE client"""
+    """
+    Unregister an SSE client
+    """
     sse_clients.discard(queue)
     logger.info(f"➖ SSE client disconnected. Total clients: {len(sse_clients)}")
 
 
 async def notify_sse_clients(event_data: dict):
-    """Send update notification to all connected SSE clients"""
+    """
+    Send update notification to all connected SSE clients
+    """
     if not sse_clients:
         logger.debug("No SSE clients connected, skipping notification")
         return
@@ -152,7 +172,7 @@ async def consume_and_invalidate_cache():
                         logger.warning(f"⚠️ Cache key not found for deletion: {CACHE_KEY_PREFIX}")
                         logger.info("This is normal if cache was already expired or empty")
                     
-                    # 🔥 NEW: Notify all connected SSE clients to refetch data
+                    # Notify all connected SSE clients to refetch data
                     event_with_service = {**event, "service": service}
                     await notify_sse_clients(event_with_service)
                     

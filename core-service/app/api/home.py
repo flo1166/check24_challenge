@@ -1,16 +1,27 @@
+###############################
+### home.py of core-service ###
+###############################
+"This enables a FastAPI server for the aggregator."
+
+###############
+### Imports ###
+###############
+
 import logging
 import asyncio
 import json
-from typing import List, Dict, Any
 from fastapi import APIRouter, status, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
-import httpx
 import datetime
 
 from app.core.cache import get_with_swr
 from app.core.clients import fetch_all_widgets_swr, fetch_user_contracts, close_all_clients
 
 logger = logging.getLogger(__name__)
+
+##################
+### Aggregator ###
+##################
 
 router = APIRouter()
 
@@ -57,11 +68,6 @@ async def fetch_and_serialize_widgets():
                 # This branch handles cases where a service entry is malformed or missing the 'widgets' key.
                 logger.warning(f"fetch_and_serialize_widgets: Skipping malformed data for {service_key}")
                 service_data["widgets"] = [] # Set to empty list to avoid downstream errors
-        
-        
-        # 3. >>> CRITICAL VALIDATION CHECK <<<
-        # If we have an aggregation structure (at least one service key) but zero valid widgets,
-        # we consider this a failure state and prevent caching.
 
         return grouped_widgets
     
@@ -73,7 +79,6 @@ async def fetch_and_serialize_widgets():
         logger.error(f"fetch_and_serialize_widgets: Error fetching widgets - {type(e).__name__}: {e}", exc_info=True)
         # If a generic error occurs, let it propagate to the API endpoint via the cache error handler
         raise
-
 
 @router.get("/home")
 async def get_home_page_widgets(background_tasks: BackgroundTasks):
@@ -125,7 +130,6 @@ async def get_home_page_widgets(background_tasks: BackgroundTasks):
             detail=f"Service error: {str(e)}"
         )
 
-
 @router.get("/user/{user_id}/contracts")
 async def get_user_contracts_endpoint(user_id: int):
     """
@@ -169,7 +173,6 @@ async def get_user_contracts_endpoint(user_id: int):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching contracts: {str(e)}"
         )
-
 
 @router.delete("/user/{user_id}/contract/{service}/{widget_id}")
 async def delete_user_contract(user_id: int, service: str, widget_id: str):
@@ -227,62 +230,11 @@ async def delete_user_contract(user_id: int, service: str, widget_id: str):
             detail=f"Failed to delete contract: {str(e)}"
         )
 
-
-@router.post("/cache/invalidate")
-async def invalidate_cache_endpoint():
-    """
-    Cache invalidation endpoint for product services.
-    
-    This endpoint allows product services to synchronously invalidate the cache
-    after creating/deleting contracts, eliminating race conditions.
-    
-    Architecture:
-    - Product Service → POST /cache/invalidate (sync) → Immediate cache clear
-    - Product Service → Kafka event (async) → SSE notifications
-    
-    This dual approach ensures:
-    1. Immediate cache invalidation (no race condition)
-    2. Clean separation of concerns (Core owns cache)
-    3. SSE notifications still work (via Kafka)
-    """
-    logger.info("📞 Cache invalidation requested via API")
-    
-    try:
-        from app.core.cache import redis_client
-        
-        if redis_client is None:
-            logger.error("❌ Redis client is None")
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Redis client not available"
-            )
-        
-        # Invalidate the home page cache
-        deleted_count = await redis_client.delete(HOME_PAGE_CACHE_KEY)
-        
-        if deleted_count > 0:
-            logger.info(f"✅ Cache invalidated via API: {HOME_PAGE_CACHE_KEY} (deleted: {deleted_count})")
-        else:
-            logger.warning(f"⚠️ Cache key not found: {HOME_PAGE_CACHE_KEY}")
-        
-        return {
-            "status": "success",
-            "message": "Cache invalidated successfully",
-            "keys_deleted": deleted_count,
-            "cache_key": HOME_PAGE_CACHE_KEY
-        }
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to invalidate cache via API: {type(e).__name__}: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Cache invalidation failed: {str(e)}"
-        )
-
-
 @router.get("/debug/circuit-breaker-status")
 async def get_circuit_breaker_status():
-    """Debug endpoint to check circuit breaker status"""
+    """
+    Debug endpoint to check circuit breaker status
+    """
     return {
         "state": "placeholder",
         "fail_counter": 0,
@@ -291,7 +243,9 @@ async def get_circuit_breaker_status():
 
 @router.post("/debug/reset-circuit-breaker")
 async def reset_circuit_breaker():
-    """Debug endpoint to manually reset circuit breaker"""
+    """
+    Debug endpoint to manually reset circuit breaker
+    """
     logger.info("Circuit breaker manually reset")
     return {"status": "reset", "new_state": "placeholder"}
 

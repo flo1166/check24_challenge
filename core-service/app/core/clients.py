@@ -1,12 +1,25 @@
+##################
+### clients.py ###
+##################
+"This enables the FastAPI server to safely fetch data from multiple microservices."
+
+###############
+### Imports ###
+###############
+
 import httpx
 from pybreaker import CircuitBreaker, CircuitBreakerError
-from typing import Dict, Any, List
+from typing import Dict, Any
 import os
 import logging
 import time
 import asyncio
 
 logger = logging.getLogger(__name__)
+
+################
+### Fallback ###
+################
 
 FALLBACK_WIDGET_PAYLOAD: Dict[str, Any] = {
     "widget_id": "fallback_error_card",
@@ -18,14 +31,21 @@ FALLBACK_WIDGET_PAYLOAD: Dict[str, Any] = {
     "priority": 999 
 }
 
+#######################
+### Circuit Breaker ###
+#######################
+
 FAILURE_THRESHOLD = 5
 RESET_TIMEOUT = 10
 
-# Circuit Breakers for each service
 car_insurance_breaker = CircuitBreaker(fail_max=FAILURE_THRESHOLD, reset_timeout=RESET_TIMEOUT)
 health_insurance_breaker = CircuitBreaker(fail_max=FAILURE_THRESHOLD, reset_timeout=RESET_TIMEOUT)
 house_insurance_breaker = CircuitBreaker(fail_max=FAILURE_THRESHOLD, reset_timeout=RESET_TIMEOUT)
 banking_breaker = CircuitBreaker(fail_max=FAILURE_THRESHOLD, reset_timeout=RESET_TIMEOUT)
+
+##############
+### Client ###
+##############
 
 class ProductServiceClient:
     """
@@ -41,7 +61,9 @@ class ProductServiceClient:
         logger.info(f"{service_name} initialized with base_url: {base_url}")
 
     async def _fetch_and_update_cache(self):
-        """Background task to fetch fresh data and update cache."""
+        """
+        Background task to fetch fresh data and update cache.
+        """
         try:
             logger.info(f"[{self.service_name}] Starting background revalidation")
             new_data = await self.fetch_data() 
@@ -78,7 +100,9 @@ class ProductServiceClient:
             return FALLBACK_WIDGET_PAYLOAD
     
     async def fetch_data(self) -> Dict[str, Any]:
-        """Fetches data from the service, protected by circuit breaker."""
+        """
+        Fetches data from the service, protected by circuit breaker.
+        """
         logger.info(f"[{self.service_name}] Fetching from {self.base_url}{self.endpoint}")
         
         try:
@@ -98,7 +122,9 @@ class ProductServiceClient:
             raise
 
     async def get_widget_model(self) -> Dict[str, Any]:
-        """Handles fetch with resilience/fallback logic."""
+        """
+        Handles fetch with resilience/fallback logic.
+        """
         try:
             data = await self.fetch_data()
             logger.info(f"[{self.service_name}] Data fetch succeeded")
@@ -114,7 +140,9 @@ class ProductServiceClient:
             return FALLBACK_WIDGET_PAYLOAD
 
     async def fetch_user_contracts(self, user_id: int) -> Dict[str, Any]:
-        """Fetches user contracts from the service."""
+        """
+        Fetches user contracts from the service.
+        """
         logger.info(f"[{self.service_name}] Fetching contracts for user {user_id}")
         
         try:
@@ -140,7 +168,9 @@ class ProductServiceClient:
             raise
 
     async def get_user_contracts(self, user_id: int) -> Dict[str, Any]:
-        """Handles fetching user contracts with resilience."""
+        """
+        Handles fetching user contracts with resilience.
+        """
         try:
             data = await self.fetch_user_contracts(user_id)
             logger.info(f"[{self.service_name}] Contract fetch succeeded for user {user_id}")
@@ -160,10 +190,9 @@ class ProductServiceClient:
         await self.client.aclose()
         logger.info(f"[{self.service_name}] HTTP client closed")
 
-
-# ============================================
-# SERVICE INSTANCES
-# ============================================
+#########################
+### Service Instances ###
+#########################
 
 # Car Insurance Service
 CAR_INSURANCE_SERVICE_URL = os.getenv("CAR_INSURANCE_SERVICE_URL", "http://localhost:8001")
@@ -201,10 +230,9 @@ banking_client = ProductServiceClient(
     breaker=banking_breaker
 )
 
-
-# ============================================
-# PUBLIC API FUNCTIONS
-# ============================================
+########################
+### Public API calls ###
+########################
 
 async def fetch_all_widgets_swr() -> Dict[str, Any]:
     """
@@ -275,12 +303,6 @@ async def fetch_all_widgets_swr() -> Dict[str, Any]:
     logger.info(f"Total widgets aggregated: {total_count} across {len(grouped_widgets)} services")
     return grouped_widgets
 
-
-async def fetch_car_insurance_widget_swr():
-    """Legacy function for backward compatibility."""
-    return await car_insurance_client.get_widget_model_swr()
-
-
 async def fetch_user_contracts(user_id: int, service: str = "car"):
     """
     Fetches user contracts from a specific service.
@@ -300,7 +322,6 @@ async def fetch_user_contracts(user_id: int, service: str = "car"):
     
     return await client.get_user_contracts(user_id)
 
-
 async def close_all_clients():
     """Closes all HTTP clients."""
     await asyncio.gather(
@@ -310,29 +331,3 @@ async def close_all_clients():
         banking_client.close()
     )
     logger.info("All service clients closed")
-    
-
-
-
-
-
-
-'''
-# TODO: delete comment
-DELETE THIS
-The goal is to wrap your HTTP client calls to external services (like your mock-product-service/) in a Circuit Breaker to prevent cascading failures.
-
-📝 How to Scale This
-
-As your Backend For Frontend (core-service) grows and needs to talk to more "Speedboat" services, you should implement the pattern like this:
-Dependency	Breaker Variable	Service Client	Protected Method
-Product Service (Car)	car_insurance_breaker	CarInsuranceClient	@car_insurance_breaker fetch_data()
-Product Service (Home)	home_insurance_breaker	HomeInsuranceClient	@home_insurance_breaker fetch_data()
-User Profile Service	profile_service_breaker	ProfileServiceClient	@profile_service_breaker fetch_data()
-
-Folder	SDUI Role	Why it's Critical
-core/models.py	Defining the Contract	Holds the source-of-truth for the widget JSON structure (the Pydantic schema). Consistency here is vital for multi-platform (Web, App) rendering.
-core/clients.py	Data Fulfillment	Manages communication with backend data sources and, crucially, ensures the data fetching is resilient (High Availability).
-core/cache.py	Performance Layer	Ensures the contract can be served quickly and scalably, directly supporting the Performance & Scalability requirement.
-api/home.py	Orchestration	Contains the logic that stitches the data pieces together and performs the final transformation into the contract.
-'''
