@@ -1,13 +1,8 @@
-/**
- * =========================================================================
- * App.jsx - FIXED: Wait for SSE *AND* data fetch to complete
- * =========================================================================
- */
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import MainLayout from './components/layout/MainLayout';
 import HomePage from './pages/HomePage';
 import { NotificationContext } from './contexts/NotificationContext';
+import { API_CONFIG, ENDPOINTS } from './config/api';  // ✅ Import config
 import './styles/index.css';
 
 export default function App() {
@@ -23,7 +18,6 @@ export default function App() {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
-  // 🔥 FIX: Track pending fetch promises
   const pendingFetchResolvers = useRef([]);
 
   const clearWidgets = () => {
@@ -38,9 +32,10 @@ export default function App() {
       setLoading(true);
       setError(null);
 
-      console.log('📡 Fetching widget data from /home endpoint...');
+      const endpoint = ENDPOINTS.home();  // ✅ Use config
+      console.log('📡 Fetching widget data from:', endpoint);
       
-      const response = await fetch('http://localhost:8000/home', {
+      const response = await fetch(endpoint, {
         headers: {
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache'
@@ -57,7 +52,6 @@ export default function App() {
       setData(jsonData);
       setLoading(false);
       
-      // 🔥 FIX: Resolve all pending fetch promises
       if (pendingFetchResolvers.current.length > 0) {
         console.log(`✅ Resolving ${pendingFetchResolvers.current.length} pending fetch promise(s)`);
         pendingFetchResolvers.current.forEach(resolve => {
@@ -75,7 +69,6 @@ export default function App() {
       setError(error.message);
       setLoading(false);
       
-      // Reject pending promises
       pendingFetchResolvers.current.forEach(resolve => {
         if (resolve.timeoutId) {
           clearTimeout(resolve.timeoutId);
@@ -87,22 +80,15 @@ export default function App() {
     }
   }, []);
 
-  /**
-   * 🔥 FIX: Wait for SSE event *AND* the subsequent data fetch to complete
-   * Returns the fresh data
-   */
   const waitForUpdate = useCallback(() => {
     return new Promise((resolve, reject) => {
       console.log('⏳ Waiting for cache invalidation and data refresh...');
       
-      // Store resolver
       pendingFetchResolvers.current.push(resolve);
       
-      // Timeout after 5 seconds
       const timeout = setTimeout(() => {
         console.warn('⚠️ Update timeout after 5 seconds');
         
-        // Remove this resolver
         const index = pendingFetchResolvers.current.indexOf(resolve);
         if (index > -1) {
           pendingFetchResolvers.current.splice(index, 1);
@@ -111,7 +97,6 @@ export default function App() {
         reject(new Error('Update timeout'));
       }, 5000);
       
-      // Store timeout ID so we can clear it
       resolve.timeoutId = timeout;
     });
   }, []);
@@ -120,12 +105,11 @@ export default function App() {
    * Set up Server-Sent Events for real-time updates
    */
   useEffect(() => {
-    // Initial fetch
     fetchWidgetData();
     
-    // Set up SSE connection for real-time updates
-    console.log('🔌 Establishing SSE connection...');
-    const eventSource = new EventSource('http://localhost:8000/stream/updates');
+    const streamEndpoint = ENDPOINTS.stream();  // ✅ Use config
+    console.log('🔌 Establishing SSE connection to:', streamEndpoint);
+    const eventSource = new EventSource(streamEndpoint);
     
     eventSource.onopen = () => {
       console.log('✅ SSE connection established');
@@ -136,12 +120,9 @@ export default function App() {
         const data = JSON.parse(event.data);
         console.log('📨 SSE message received:', data);
         
-        // Handle different message types
         if (data.type === 'cache_invalidated') {
           console.log('🔄 Cache invalidated!');
           console.log(`   Reason: ${data.reason} for user ${data.user_id}`);
-          
-          // 🔥 FIX: Fetch fresh data - this will resolve pending promises when done
           fetchWidgetData();
           
         } else if (data.type === 'connected') {
@@ -159,16 +140,12 @@ export default function App() {
       console.log('🔄 SSE will attempt to reconnect...');
     };
     
-    // Cleanup on unmount
     return () => {
       console.log('🔌 Closing SSE connection');
       eventSource.close();
     };
   }, [fetchWidgetData]);
 
-  /**
-   * Update notification counts
-   */
   const updateNotification = (type, increment = 1) => {
     setNotifications(prev => ({
       ...prev,
@@ -176,9 +153,6 @@ export default function App() {
     }));
   };
 
-  /**
-   * Reset a notification count
-   */
   const resetNotification = (type) => {
     setNotifications(prev => ({
       ...prev,
@@ -186,14 +160,11 @@ export default function App() {
     }));
   };
 
-  /**
-   * 🔥 FIX: Provide waitForUpdate to children
-   */
   const contextValue = {
     notifications,
     updateNotification,
     resetNotification,
-    waitForUpdate  // 🔥 Returns fresh data after SSE + fetch complete
+    waitForUpdate
   };
 
   return (

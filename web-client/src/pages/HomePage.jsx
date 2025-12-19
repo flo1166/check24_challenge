@@ -15,6 +15,7 @@ import Loader from '../components/common/Loader';
 import { useNotifications } from '../contexts/NotificationContext';
 import InsuranceCentre from '../components/layout/InsuranceCentre';
 import WidgetSection from '../components/widgets/WidgetSection';
+import { API_CONFIG, ENDPOINTS } from '../config/api';
 
 // Constant for localStorage key
 const COLLAPSE_STATE_KEY = 'widgetSectionCollapseState';
@@ -70,7 +71,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
   const createAddToCartHandler = useCallback((serviceKey, apiPort) => {
     return async (widgetData) => {
       const userId = 123; // TODO: Get from auth context
-      const apiUrl = `http://localhost:${apiPort}/widget/${serviceKey}/contract`;
+      const apiUrl = ENDPOINTS.createContract(serviceKey, apiPort); 
       
       const payload = {
         user_id: userId,
@@ -79,6 +80,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
 
       try {
         console.log(`🛒 Adding ${serviceKey} to cart...`);
+        console.log(`   API URL: ${apiUrl}`)
         
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -117,10 +119,10 @@ export default function HomePage({ data, loading, error, onRetry }) {
   }, [waitForUpdate]);
 
   // Create handlers for each service
-  const handleCarInsuranceAdded = createAddToCartHandler('car-insurance', 8001);
-  const handleHealthInsuranceAdded = createAddToCartHandler('health-insurance', 8002);
-  const handleHouseInsuranceAdded = createAddToCartHandler('house-insurance', 8003);
-  const handleBankingAdded = createAddToCartHandler('banking', 8004);
+  const handleCarInsuranceAdded = createAddToCartHandler('car-insurance', API_CONFIG.ports.carInsurance);
+  const handleHealthInsuranceAdded = createAddToCartHandler('health-insurance', API_CONFIG.ports.healthInsurance);
+  const handleHouseInsuranceAdded = createAddToCartHandler('house-insurance', API_CONFIG.ports.houseInsurance);
+  const handleBankingAdded = createAddToCartHandler('banking', API_CONFIG.ports.banking);
 
   /**
    * Check if any service has valid widgets (not just fallback)

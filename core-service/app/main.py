@@ -148,12 +148,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://10.0.2.2",      # Android Emulator default alias
-        "http://localhost",
-        "null"                  # Often needed for mobile apps hitting static files
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
