@@ -1,40 +1,35 @@
 services:
-  # ============================================================
-  # INFRASTRUCTURE LAYER
-  # ============================================================
-  
-  # Redis Cache
+  # --- INFRASTRUCTURE ---
   - type: redis
     name: redis-cache
     plan: free
-    ipAllowList: [] # Only internal access
+    ipAllowList: [] 
 
-  # Kafka (Note: Kafka requires a 'starter' plan or higher for stability)
-  - type: pserv
+  - type: web
     name: kafka
+    plan: starter
     runtime: docker
     dockerContext: .
-    dockerfile: ./kafka.Dockerfile # You will need a custom Dockerfile to run Kafka without Compose
+    dockerfilePath: ./kafka.Dockerfile  # Fixed key name
     envVars:
       - key: KAFKA_ADVERTISED_LISTENERS
         value: PLAINTEXT://kafka:9093
       - key: KAFKA_ZOOKEEPER_CONNECT
         value: zookeeper:2181
 
-  - type: pserv
+  - type: web
     name: zookeeper
+    plan: starter
     runtime: docker
     dockerContext: .
-    dockerfile: ./zookeeper.Dockerfile
+    dockerfilePath: ./zookeeper.Dockerfile # Fixed key name
 
-  # ============================================================
-  # PRODUCT SERVICES (Private Services)
-  # ============================================================
-  
-  - type: pserv
+  # --- PRODUCT SERVICES ---
+  - type: web
     name: car-insurance-service
     runtime: docker
     dockerContext: ./car-insurance-service
+    dockerfilePath: ./car-insurance-service/Dockerfile
     envVars:
       - key: DB_HOST
         fromDatabase:
@@ -43,44 +38,45 @@ services:
       - key: KAFKA_BROKER
         value: kafka:9093
 
-  - type: pserv
+  - type: web
     name: health-insurance-service
     runtime: docker
     dockerContext: ./health-insurance-service
+    dockerfilePath: ./health-insurance-service/Dockerfile
     envVars:
       - key: DB_HOST
         fromDatabase:
           name: product-db-health
           property: host
 
-  - type: pserv
+  - type: web
     name: house-insurance-service
     runtime: docker
     dockerContext: ./house-insurance-service
+    dockerfilePath: ./house-insurance-service/Dockerfile
     envVars:
       - key: DB_HOST
         fromDatabase:
           name: product-db-house
           property: host
 
-  - type: pserv
+  - type: web
     name: banking-service
     runtime: docker
     dockerContext: ./banking-service
+    dockerfilePath: ./banking-service/Dockerfile
     envVars:
       - key: DB_HOST
         fromDatabase:
           name: product-db-banking
           property: host
 
-  # ============================================================
-  # CORE SERVICE (Public Web Service)
-  # ============================================================
-  
+  # --- CORE SERVICE ---
   - type: web
     name: core-service
     runtime: docker
     dockerContext: ./core-service
+    dockerfilePath: ./core-service/Dockerfile
     plan: starter
     envVars:
       - key: CAR_INSURANCE_SERVICE_URL
@@ -101,22 +97,15 @@ services:
           name: core-db
           property: host
 
-# ============================================================
-# DATABASES (Managed Instances)
-# ============================================================
+# --- DATABASES ---
 databases:
   - name: product-db-car
-    databaseName: car_insurance_db
-    user: product_user
+    plan: free
   - name: product-db-health
-    databaseName: health_insurance_db
-    user: product_user
+    plan: free
   - name: product-db-house
-    databaseName: house_insurance_db
-    user: product_user
+    plan: free
   - name: product-db-banking
-    databaseName: banking_db
-    user: product_user
+    plan: free
   - name: core-db
-    databaseName: widget_platform_db
-    user: core_user
+    plan: free
