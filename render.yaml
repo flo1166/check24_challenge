@@ -1,0 +1,122 @@
+services:
+  # ============================================================
+  # INFRASTRUCTURE LAYER
+  # ============================================================
+  
+  # Redis Cache
+  - type: redis
+    name: redis-cache
+    plan: free
+    ipAllowList: [] # Only internal access
+
+  # Kafka (Note: Kafka requires a 'starter' plan or higher for stability)
+  - type: pserv
+    name: kafka
+    runtime: docker
+    dockerContext: .
+    dockerfile: ./kafka.Dockerfile # You will need a custom Dockerfile to run Kafka without Compose
+    envVars:
+      - key: KAFKA_ADVERTISED_LISTENERS
+        value: PLAINTEXT://kafka:9093
+      - key: KAFKA_ZOOKEEPER_CONNECT
+        value: zookeeper:2181
+
+  - type: pserv
+    name: zookeeper
+    runtime: docker
+    dockerContext: .
+    dockerfile: ./zookeeper.Dockerfile
+
+  # ============================================================
+  # PRODUCT SERVICES (Private Services)
+  # ============================================================
+  
+  - type: pserv
+    name: car-insurance-service
+    runtime: docker
+    dockerContext: ./car-insurance-service
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: product-db-car
+          property: host
+      - key: KAFKA_BROKER
+        value: kafka:9093
+
+  - type: pserv
+    name: health-insurance-service
+    runtime: docker
+    dockerContext: ./health-insurance-service
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: product-db-health
+          property: host
+
+  - type: pserv
+    name: house-insurance-service
+    runtime: docker
+    dockerContext: ./house-insurance-service
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: product-db-house
+          property: host
+
+  - type: pserv
+    name: banking-service
+    runtime: docker
+    dockerContext: ./banking-service
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: product-db-banking
+          property: host
+
+  # ============================================================
+  # CORE SERVICE (Public Web Service)
+  # ============================================================
+  
+  - type: web
+    name: core-service
+    runtime: docker
+    dockerContext: ./core-service
+    plan: starter
+    envVars:
+      - key: CAR_INSURANCE_SERVICE_URL
+        value: http://car-insurance-service:8000
+      - key: HEALTH_INSURANCE_SERVICE_URL
+        value: http://health-insurance-service:8000
+      - key: HOUSE_INSURANCE_SERVICE_URL
+        value: http://house-insurance-service:8000
+      - key: BANKING_SERVICE_URL
+        value: http://banking-service:8000
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: redis-cache
+          property: host
+      - key: DB_HOST
+        fromDatabase:
+          name: core-db
+          property: host
+
+# ============================================================
+# DATABASES (Managed Instances)
+# ============================================================
+databases:
+  - name: product-db-car
+    databaseName: car_insurance_db
+    user: product_user
+  - name: product-db-health
+    databaseName: health_insurance_db
+    user: product_user
+  - name: product-db-house
+    databaseName: house_insurance_db
+    user: product_user
+  - name: product-db-banking
+    databaseName: banking_db
+    user: product_user
+  - name: core-db
+    databaseName: widget_platform_db
+    user: core_user
