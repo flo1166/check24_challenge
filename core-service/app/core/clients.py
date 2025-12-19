@@ -37,9 +37,6 @@ class ProductServiceClient:
         self.endpoint = endpoint
         self.breaker = breaker
         self.client = httpx.AsyncClient(base_url=self.base_url, timeout=5.0)
-        self.cache = {}
-        self.FRESH_PERIOD_SECONDS = 5
-        self.STALE_PERIOD_SECONDS = 30
         
         logger.info(f"{service_name} initialized with base_url: {base_url}")
 
@@ -59,44 +56,27 @@ class ProductServiceClient:
             logger.warning(f"[{self.service_name}] Background revalidation failed: {type(e).__name__}: {e}")
     
     async def get_widget_model_swr(self) -> Dict[str, Any]:
-        """Implements Stale-While-Revalidate logic."""
-        logger.info(f"[{self.service_name}] SWR fetch called")
-        
-        current_time = time.time()
-        
-        cached_item = self.cache.get("data")
-        cached_timestamp = self.cache.get("timestamp", 0)
-        
-        if cached_item:
-            time_difference = current_time - cached_timestamp
-
-            # FRESH Data
-            if time_difference < self.FRESH_PERIOD_SECONDS:
-                logger.info(f"[{self.service_name}] Cache hit (FRESH)")
-                return cached_item
-
-            # STALE Data
-            elif time_difference < self.STALE_PERIOD_SECONDS:
-                logger.warning(f"[{self.service_name}] Cache hit (STALE - {time_difference:.1f}s old)")
-                asyncio.create_task(self._fetch_and_update_cache())
-                return cached_item
-        
-        # Cache miss
-        logger.warning(f"[{self.service_name}] Cache miss - performing foreground fetch")
+        """
+        Fetch widget data directly without in-memory caching.
+        Caching is handled by Redis in the core service layer.
+        """
+        logger.info(f"[{self.service_name}] Fetching widget data")
         
         try:
             data = await self.fetch_data()
-            
-            self.cache.update({
-                "data": data,
-                "timestamp": current_time,
-            })
+            logger.info(f"[{self.service_name}] Data fetch succeeded")
             return data
             
-        except (CircuitBreakerError, httpx.HTTPError, Exception) as e:
-            logger.error(f"[{self.service_name}] Primary fetch failed: {type(e).__name__}: {e}")
+        except CircuitBreakerError as e:
+            logger.error(f"[{self.service_name}] Circuit Breaker OPEN: {e}")
             return FALLBACK_WIDGET_PAYLOAD
-
+        except httpx.HTTPError as e:
+            logger.error(f"[{self.service_name}] HTTP error: {type(e).__name__}: {e}")
+            return FALLBACK_WIDGET_PAYLOAD
+        except Exception as e:
+            logger.error(f"[{self.service_name}] Unexpected error: {type(e).__name__}: {e}")
+            return FALLBACK_WIDGET_PAYLOAD
+    
     async def fetch_data(self) -> Dict[str, Any]:
         """Fetches data from the service, protected by circuit breaker."""
         logger.info(f"[{self.service_name}] Fetching from {self.base_url}{self.endpoint}")

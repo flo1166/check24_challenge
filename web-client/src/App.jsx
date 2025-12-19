@@ -1,13 +1,10 @@
 /**
  * =========================================================================
- * App.jsx - UPDATED WITH WIDGETS-UPDATED EVENT LISTENER
+ * App.jsx - FIXED: Wait for SSE *AND* data fetch to complete
  * =========================================================================
- * 
- * ✅ FIX: Listen for 'widgets-updated' event to refetch widget data
- *    This ensures widgets reappear after contract deletion
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import MainLayout from './components/layout/MainLayout';
 import HomePage from './pages/HomePage';
 import { NotificationContext } from './contexts/NotificationContext';
@@ -26,6 +23,9 @@ export default function App() {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
+  // 🔥 FIX: Track pending fetch promises
+  const pendingFetchResolvers = useRef([]);
+
   const clearWidgets = () => {
     setData(prev => prev ? {...prev, widgets: []} : null);
   };
@@ -40,7 +40,12 @@ export default function App() {
 
       console.log('📡 Fetching widget data from /home endpoint...');
       
-      const response = await fetch('http://localhost:8000/home');
+      const response = await fetch('http://localhost:8000/home', {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP Error! Status: ${response.status}`);
@@ -48,34 +53,67 @@ export default function App() {
 
       const jsonData = await response.json();
       
-      // 🔥 NEW: Check if data is fresh
-      const dataTimestamp = new Date(jsonData.timestamp);
-      const now = new Date();
-      const ageMs = now - dataTimestamp;
+      console.log(`✅ Widget data received:`, jsonData);
+      setData(jsonData);
+      setLoading(false);
       
-      console.log(`✅ Widget data received (age: ${ageMs}ms):`, jsonData);
-      
-      // If data is older than 500ms, it might be stale cache
-      if (ageMs > 500) {
-        console.warn('⚠️ Data might be from cache, retrying in 200ms...');
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        // Retry once
-        const retryResponse = await fetch('http://localhost:8000/home');
-        const retryData = await retryResponse.json();
-        console.log('✅ Retry successful:', retryData);
-        
-        setData(retryData);
-      } else {
-        setData(jsonData);
+      // 🔥 FIX: Resolve all pending fetch promises
+      if (pendingFetchResolvers.current.length > 0) {
+        console.log(`✅ Resolving ${pendingFetchResolvers.current.length} pending fetch promise(s)`);
+        pendingFetchResolvers.current.forEach(resolve => {
+          if (resolve.timeoutId) {
+            clearTimeout(resolve.timeoutId);
+          }
+          resolve(jsonData);
+        });
+        pendingFetchResolvers.current = [];
       }
       
-      setLoading(false);
+      return jsonData;
     } catch (error) {
       console.error('❌ Fetch failed:', error);
       setError(error.message);
       setLoading(false);
+      
+      // Reject pending promises
+      pendingFetchResolvers.current.forEach(resolve => {
+        if (resolve.timeoutId) {
+          clearTimeout(resolve.timeoutId);
+        }
+      });
+      pendingFetchResolvers.current = [];
+      
+      throw error;
     }
+  }, []);
+
+  /**
+   * 🔥 FIX: Wait for SSE event *AND* the subsequent data fetch to complete
+   * Returns the fresh data
+   */
+  const waitForUpdate = useCallback(() => {
+    return new Promise((resolve, reject) => {
+      console.log('⏳ Waiting for cache invalidation and data refresh...');
+      
+      // Store resolver
+      pendingFetchResolvers.current.push(resolve);
+      
+      // Timeout after 5 seconds
+      const timeout = setTimeout(() => {
+        console.warn('⚠️ Update timeout after 5 seconds');
+        
+        // Remove this resolver
+        const index = pendingFetchResolvers.current.indexOf(resolve);
+        if (index > -1) {
+          pendingFetchResolvers.current.splice(index, 1);
+        }
+        
+        reject(new Error('Update timeout'));
+      }, 5000);
+      
+      // Store timeout ID so we can clear it
+      resolve.timeoutId = timeout;
+    });
   }, []);
 
   /**
@@ -100,16 +138,16 @@ export default function App() {
         
         // Handle different message types
         if (data.type === 'cache_invalidated') {
-          console.log('🔄 Cache invalidated, refetching widgets...');
+          console.log('🔄 Cache invalidated!');
           console.log(`   Reason: ${data.reason} for user ${data.user_id}`);
+          
+          // 🔥 FIX: Fetch fresh data - this will resolve pending promises when done
           fetchWidgetData();
+          
         } else if (data.type === 'connected') {
           console.log('✅ SSE connection confirmed');
         } else if (data.type === 'ping') {
           console.log('💓 SSE keepalive ping');
-        } else {
-          console.log('🔄 Generic update received, refetching widgets...');
-          fetchWidgetData();
         }
       } catch (error) {
         console.error('❌ Failed to parse SSE message:', error);
@@ -125,23 +163,6 @@ export default function App() {
     return () => {
       console.log('🔌 Closing SSE connection');
       eventSource.close();
-    };
-  }, [fetchWidgetData]);
-
-  /**
-   * 🔥 NEW: Listen for manual widget update requests
-   * This is triggered when contracts are deleted in Insurance Centre
-   */
-  useEffect(() => {
-    const handleWidgetsUpdate = () => {
-      console.log('📢 [App] widgets-updated event received - refetching widgets...');
-      fetchWidgetData();
-    };
-    
-    window.addEventListener('widgets-updated', handleWidgetsUpdate);
-    
-    return () => {
-      window.removeEventListener('widgets-updated', handleWidgetsUpdate);
     };
   }, [fetchWidgetData]);
 
@@ -165,10 +186,18 @@ export default function App() {
     }));
   };
 
+  /**
+   * 🔥 FIX: Provide waitForUpdate to children
+   */
+  const contextValue = {
+    notifications,
+    updateNotification,
+    resetNotification,
+    waitForUpdate  // 🔥 Returns fresh data after SSE + fetch complete
+  };
+
   return (
-    <NotificationContext.Provider
-      value={{ notifications, updateNotification, resetNotification }}
-    >
+    <NotificationContext.Provider value={contextValue}>
       <MainLayout>
         <HomePage
           data={data}

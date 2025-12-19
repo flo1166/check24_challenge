@@ -18,9 +18,8 @@ import WidgetSection from '../components/widgets/WidgetSection';
 
 // Constant for localStorage key
 const COLLAPSE_STATE_KEY = 'widgetSectionCollapseState';
-
 export default function HomePage({ data, loading, error, onRetry }) {
-  const { notifications } = useNotifications();
+  const { notifications, waitForUpdate } = useNotifications(); 
   
   // NEW STATE: Map of serviceKey -> isCollapsed (boolean)
   const [collapsedSections, setCollapsedSections] = useState({});
@@ -68,7 +67,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
   /**
    * Handler factory for adding products to cart by service
    */
-  const createAddToCartHandler = (serviceKey, apiPort) => {
+  const createAddToCartHandler = useCallback((serviceKey, apiPort) => {
     return async (widgetData) => {
       const userId = 123; // TODO: Get from auth context
       const apiUrl = `http://localhost:${apiPort}/widget/${serviceKey}/contract`;
@@ -96,19 +95,26 @@ export default function HomePage({ data, loading, error, onRetry }) {
         const result = await response.json();
         console.log(`✅ Contract created for ${serviceKey}:`, result.contract_id);
 
-        await new Promise(resolve => setTimeout(resolve, 300));
-        console.log('📢 [HomePage] Dispatching contracts-updated event');
-        window.dispatchEvent(new Event('contracts-updated'));
-
-        console.log('📢 [HomePage] Dispatching widgets-updated event');
-        window.dispatchEvent(new Event('widgets-updated'));
+        // 🔥 FIXED: Wait for SSE event *AND* data fetch to complete
+        try {
+          console.log('⏳ Waiting for cache invalidation and data refresh...');
+          const freshData = await waitForUpdate();
+          console.log('✅ Fresh data received, UI will update automatically:', freshData);
+          
+          // Also trigger contract refetch
+          window.dispatchEvent(new Event('contracts-updated'));
+        } catch (error) {
+          console.warn('⚠️ Update timeout, forcing manual refresh');
+          window.dispatchEvent(new Event('contracts-updated'));
+          window.dispatchEvent(new Event('widgets-updated'));
+        }
                 
       } catch (error) {
         console.error(`❌ Failed to save ${serviceKey} contract:`, error);
         // TODO: Show error toast to user
       }
     };
-  };
+  }, [waitForUpdate]);
 
   // Create handlers for each service
   const handleCarInsuranceAdded = createAddToCartHandler('car-insurance', 8001);

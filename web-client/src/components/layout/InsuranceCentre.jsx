@@ -52,7 +52,7 @@ export default function InsuranceCentre({
   const [flippedCards, setFlippedCards] = useState({});
   const [contracts, setContracts] = useState({}); 
   const [loading, setLoading] = useState(true);
-  const { notifications } = useNotifications();
+  const { notifications, waitForSSEUpdate } = useNotifications();
 
 
   // 1. Core Logic: Fetch and Process ALL Contracts from Backend
@@ -237,7 +237,7 @@ export default function InsuranceCentre({
         const result = await response.json();
         console.log('✅ Contract deleted:', result);
         
-        // Remove from local state immediately (optimistic update)
+        // Optimistic update - remove from local state immediately
         setContracts(prev => {
           const newContracts = { ...prev };
           delete newContracts[category.id];
@@ -249,26 +249,33 @@ export default function InsuranceCentre({
           [category.id]: false
         }));
         
-        // Reset flipped state
         setFlippedCards(prev => ({
           ...prev,
           [category.id]: false
         }));
         
-        await new Promise(resolve => setTimeout(resolve, 300));
-        // 🔥 Trigger refetch to ensure consistency
-        window.dispatchEvent(new Event('contracts-updated'));
-        
-        // 🔥 NEW: Also trigger widget refetch so deleted service widgets reappear
-        console.log('📢 [InsuranceCentre] Dispatching widgets-updated event');
-        window.dispatchEvent(new Event('widgets-updated'));
+        // 🔥 FIXED: Wait for SSE event *AND* data fetch to complete
+        try {
+          console.log('⏳ Waiting for cache invalidation and data refresh...');
+          const freshData = await waitForUpdate();
+          console.log('✅ Fresh data received:', freshData);
+          
+          // Trigger contracts refetch in this component
+          fetchUserContracts();
+        } catch (error) {
+          console.warn('⚠️ Update timeout, forcing manual refresh');
+          window.dispatchEvent(new Event('contracts-updated'));
+          window.dispatchEvent(new Event('widgets-updated'));
+        }
         
       } catch (error) {
         console.error('❌ Failed to delete contract:', error);
         // TODO: Show error toast to user
+        
+        // Revert optimistic update on error
+        fetchUserContracts();
       }
     };
-
     return (
       <div className="insurance-tile-back relative">
         {/* Delete Button - Top Right Corner */}
