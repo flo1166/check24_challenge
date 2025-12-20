@@ -1,7 +1,7 @@
 ###############################
 ### main.py of core-service ###
 ###############################
-"This enables a FastAPI server for the core-service."
+"This enables a FastAPI server for the core-service (without Kafka/Redis)."
 
 ###############
 ### Imports ###
@@ -15,26 +15,20 @@ dictConfig(LOGGING_CONFIG)
 from pathlib import Path
 import asyncio
 import logging
-from typing import Set, Optional
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.api import home
 
-from app.core.cache import init_redis_client, close_redis_client
 from app.core.clients import (
     car_insurance_client,
     health_insurance_client,
     house_insurance_client,
     banking_client
 )
-from app.workers.kafka_consumer import consume_and_invalidate_cache
 
 logger = logging.getLogger(__name__)
-
-background_tasks: Set[asyncio.Task] = set()
-kafka_consumer_task: Optional[asyncio.Task] = None
 
 async def wait_for_services():
     """
@@ -81,31 +75,11 @@ async def lifespan(app: FastAPI):
     :param app: The Fast API object
     :type app: FastAPI
     """
-    global kafka_consumer_task
-    
     logger.info("=" * 60)
     logger.info("Application starting up: Initializing dependencies...")
     logger.info("=" * 60)
     
     await wait_for_services()
-    
-    try:
-        logger.info("Initializing Redis client...")
-        await init_redis_client()
-        logger.info("✓ Redis client initialized successfully")
-        
-    except Exception as e:
-        logger.warning(f"⚠ Redis initialization warning: {type(e).__name__}: {e}")
-    
-    try:
-        logger.info("Starting Kafka Consumer as background task...")
-        kafka_consumer_task = asyncio.create_task(consume_and_invalidate_cache())
-        background_tasks.add(kafka_consumer_task)
-        kafka_consumer_task.add_done_callback(background_tasks.discard)
-        logger.info("✓ Kafka Consumer background task scheduled with asyncio")
-        
-    except Exception as e:
-        logger.warning(f"⚠ Kafka Consumer warning: {type(e).__name__}: {e}")
     
     logger.info("=" * 60)
     logger.info("✓ Application ready to accept requests")
@@ -118,22 +92,12 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     
     try:
-        if kafka_consumer_task and not kafka_consumer_task.done():
-            logger.info("Canceling Kafka Consumer task...")
-            kafka_consumer_task.cancel()
-            await asyncio.gather(kafka_consumer_task, return_exceptions=True)
-            logger.info("✓ Kafka Consumer task stopped")
-        
         logger.info("Closing Product Service HTTP clients...")
         await car_insurance_client.close()
         await health_insurance_client.close()
         await house_insurance_client.close()
         await banking_client.close()
         logger.info("✓ Product Service HTTP clients closed")
-        
-        logger.info("Closing Redis client...")
-        await close_redis_client()
-        logger.info("✓ Redis client closed")
         
     except Exception as e:
         logger.error(f"Error during shutdown: {type(e).__name__}: {e}", exc_info=True)

@@ -1,18 +1,16 @@
 ##################
 ### clients.py ###
 ##################
-"This enables the FastAPI server to safely fetch data from multiple microservices."
+"This enables the FastAPI server to safely fetch data from multiple microservices (simplified without circuit breakers)."
 
 ###############
 ### Imports ###
 ###############
 
 import httpx
-from pybreaker import CircuitBreaker, CircuitBreakerError
 from typing import Dict, Any
 import os
 import logging
-import time
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -31,56 +29,25 @@ FALLBACK_WIDGET_PAYLOAD: Dict[str, Any] = {
     "priority": 999 
 }
 
-#######################
-### Circuit Breaker ###
-#######################
-
-FAILURE_THRESHOLD = 5
-RESET_TIMEOUT = 10
-
-car_insurance_breaker = CircuitBreaker(fail_max=FAILURE_THRESHOLD, reset_timeout=RESET_TIMEOUT)
-health_insurance_breaker = CircuitBreaker(fail_max=FAILURE_THRESHOLD, reset_timeout=RESET_TIMEOUT)
-house_insurance_breaker = CircuitBreaker(fail_max=FAILURE_THRESHOLD, reset_timeout=RESET_TIMEOUT)
-banking_breaker = CircuitBreaker(fail_max=FAILURE_THRESHOLD, reset_timeout=RESET_TIMEOUT)
-
 ##############
 ### Client ###
 ##############
 
 class ProductServiceClient:
     """
-    Universal client for product services with circuit breaker protection.
+    Universal client for product services.
     """
-    def __init__(self, service_name: str, base_url: str, endpoint: str, breaker: CircuitBreaker):
+    def __init__(self, service_name: str, base_url: str, endpoint: str):
         self.service_name = service_name
         self.base_url = base_url
         self.endpoint = endpoint
-        self.breaker = breaker
-        self.client = httpx.AsyncClient(base_url=self.base_url, timeout=5.0)
+        self.client = httpx.AsyncClient(base_url=self.base_url, timeout=10.0)
         
         logger.info(f"{service_name} initialized with base_url: {base_url}")
 
-    async def _fetch_and_update_cache(self):
+    async def get_widget_model(self) -> Dict[str, Any]:
         """
-        Background task to fetch fresh data and update cache.
-        """
-        try:
-            logger.info(f"[{self.service_name}] Starting background revalidation")
-            new_data = await self.fetch_data() 
-            
-            self.cache.update({
-                "data": new_data,
-                "timestamp": time.time(),
-            })
-            logger.info(f"[{self.service_name}] Cache successfully updated")
-            
-        except (CircuitBreakerError, httpx.HTTPError, Exception) as e:
-            logger.warning(f"[{self.service_name}] Background revalidation failed: {type(e).__name__}: {e}")
-    
-    async def get_widget_model_swr(self) -> Dict[str, Any]:
-        """
-        Fetch widget data directly without in-memory caching.
-        Caching is handled by Redis in the core service layer.
+        Fetch widget data with fallback on error.
         """
         logger.info(f"[{self.service_name}] Fetching widget data")
         
@@ -89,9 +56,6 @@ class ProductServiceClient:
             logger.info(f"[{self.service_name}] Data fetch succeeded")
             return data
             
-        except CircuitBreakerError as e:
-            logger.error(f"[{self.service_name}] Circuit Breaker OPEN: {e}")
-            return FALLBACK_WIDGET_PAYLOAD
         except httpx.HTTPError as e:
             logger.error(f"[{self.service_name}] HTTP error: {type(e).__name__}: {e}")
             return FALLBACK_WIDGET_PAYLOAD
@@ -101,7 +65,7 @@ class ProductServiceClient:
     
     async def fetch_data(self) -> Dict[str, Any]:
         """
-        Fetches data from the service, protected by circuit breaker.
+        Fetches data from the service.
         """
         logger.info(f"[{self.service_name}] Fetching from {self.base_url}{self.endpoint}")
         
@@ -120,24 +84,6 @@ class ProductServiceClient:
         except Exception as e:
             logger.error(f"[{self.service_name}] Exception: {type(e).__name__}: {e}")
             raise
-
-    async def get_widget_model(self) -> Dict[str, Any]:
-        """
-        Handles fetch with resilience/fallback logic.
-        """
-        try:
-            data = await self.fetch_data()
-            logger.info(f"[{self.service_name}] Data fetch succeeded")
-            return data 
-        except CircuitBreakerError as e:
-            logger.error(f"[{self.service_name}] Circuit Breaker OPEN: {e}")
-            return FALLBACK_WIDGET_PAYLOAD
-        except httpx.HTTPError as e:
-            logger.error(f"[{self.service_name}] HTTP error: {type(e).__name__}: {e}")
-            return FALLBACK_WIDGET_PAYLOAD
-        except Exception as e:
-            logger.error(f"[{self.service_name}] Unexpected error: {type(e).__name__}: {e}")
-            return FALLBACK_WIDGET_PAYLOAD
 
     async def fetch_user_contracts(self, user_id: int) -> Dict[str, Any]:
         """
@@ -169,15 +115,12 @@ class ProductServiceClient:
 
     async def get_user_contracts(self, user_id: int) -> Dict[str, Any]:
         """
-        Handles fetching user contracts with resilience.
+        Handles fetching user contracts with error handling.
         """
         try:
             data = await self.fetch_user_contracts(user_id)
             logger.info(f"[{self.service_name}] Contract fetch succeeded for user {user_id}")
             return data if data else {}
-        except CircuitBreakerError as e:
-            logger.error(f"[{self.service_name}] Circuit Breaker OPEN: {e}")
-            return {}
         except httpx.HTTPError as e:
             logger.error(f"[{self.service_name}] HTTP error: {type(e).__name__}: {e}")
             return {}
@@ -199,8 +142,7 @@ CAR_INSURANCE_SERVICE_URL = os.getenv("CAR_INSURANCE_SERVICE_URL", "http://local
 car_insurance_client = ProductServiceClient(
     service_name="CarInsurance",
     base_url=CAR_INSURANCE_SERVICE_URL,
-    endpoint="/widget/car-insurance",
-    breaker=car_insurance_breaker
+    endpoint="/widget/car-insurance"
 )
 
 # Health Insurance Service
@@ -208,8 +150,7 @@ HEALTH_INSURANCE_SERVICE_URL = os.getenv("HEALTH_INSURANCE_SERVICE_URL", "http:/
 health_insurance_client = ProductServiceClient(
     service_name="HealthInsurance",
     base_url=HEALTH_INSURANCE_SERVICE_URL,
-    endpoint="/widget/health-insurance",
-    breaker=health_insurance_breaker
+    endpoint="/widget/health-insurance"
 )
 
 # House Insurance Service
@@ -217,8 +158,7 @@ HOUSE_INSURANCE_SERVICE_URL = os.getenv("HOUSE_INSURANCE_SERVICE_URL", "http://l
 house_insurance_client = ProductServiceClient(
     service_name="HouseInsurance",
     base_url=HOUSE_INSURANCE_SERVICE_URL,
-    endpoint="/widget/house-insurance",
-    breaker=house_insurance_breaker
+    endpoint="/widget/house-insurance"
 )
 
 # Banking Service
@@ -226,15 +166,14 @@ BANKING_SERVICE_URL = os.getenv("BANKING_SERVICE_URL", "http://localhost:8004")
 banking_client = ProductServiceClient(
     service_name="Banking",
     base_url=BANKING_SERVICE_URL,
-    endpoint="/widget/banking",
-    breaker=banking_breaker
+    endpoint="/widget/banking"
 )
 
 ########################
 ### Public API calls ###
 ########################
 
-async def fetch_all_widgets_swr() -> Dict[str, Any]:
+async def fetch_all_widgets() -> Dict[str, Any]:
     """
     Aggregates widgets from all product services.
     Returns widgets grouped by service.
@@ -243,10 +182,10 @@ async def fetch_all_widgets_swr() -> Dict[str, Any]:
     
     # Fetch from all services concurrently
     results = await asyncio.gather(
-        car_insurance_client.get_widget_model_swr(),
-        health_insurance_client.get_widget_model_swr(),
-        house_insurance_client.get_widget_model_swr(),
-        banking_client.get_widget_model_swr(),
+        car_insurance_client.get_widget_model(),
+        health_insurance_client.get_widget_model(),
+        house_insurance_client.get_widget_model(),
+        banking_client.get_widget_model(),
         return_exceptions=True
     )
     
@@ -302,10 +241,6 @@ async def fetch_all_widgets_swr() -> Dict[str, Any]:
     
     logger.info(f"Total widgets aggregated: {total_count} across {len(grouped_widgets)} services")
     return grouped_widgets
-
-async def fetch_car_insurance_widget_swr():
-    """Legacy function for backward compatibility."""
-    return await car_insurance_client.get_widget_model_swr()
 
 async def fetch_user_contracts(user_id: int, service: str = "car"):
     """
