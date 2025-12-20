@@ -303,6 +303,10 @@ async def fetch_all_widgets_swr() -> Dict[str, Any]:
     logger.info(f"Total widgets aggregated: {total_count} across {len(grouped_widgets)} services")
     return grouped_widgets
 
+async def fetch_car_insurance_widget_swr():
+    """Legacy function for backward compatibility."""
+    return await car_insurance_client.get_widget_model_swr()
+
 async def fetch_user_contracts(user_id: int, service: str = "car"):
     """
     Fetches user contracts from a specific service.

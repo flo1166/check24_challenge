@@ -5,8 +5,8 @@
 This document provides the technical specification for the CHECK24 Home Widgets platform - a distributed, high-performance system enabling decentralized product teams to deliver personalized content to the CHECK24 Home experience across Web, iOS, and Android platforms.
 
 **Key Achievements:**
-- **Performance**: Sub-100ms response times with SWR caching strategy
-- **Availability**: 99.9%+ uptime through circuit breakers and graceful degradation
+- **Performance**: SWR caching strategy
+- **Availability**: through circuit breakers and graceful degradation
 - **Scalability**: Horizontal scaling of all components without single points of failure
 - **Flexibility**: JSON-based contract enables multi-platform rendering without code changes
 - **Developer Experience**: Clear integration path with minimal coupling to Core systems
@@ -40,14 +40,14 @@ The Home Widgets platform follows a **Backend-for-Frontend (BFF) pattern** with 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Client Layer                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  Web Client  │  │  iOS App     │  │ Android App  │      │
-│  │  (React)     │  │  (Swift)     │  │  (Kotlin)    │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-└─────────┼──────────────────┼──────────────────┼─────────────┘
-          │                  │                  │
-          └──────────────────┼──────────────────┘
+│                      Client Layer                           │
+│  ┌──────────────┐                     ┌──────────────┐      │
+│  │  Web Client  │                     │ Android App  │      │
+│  │  (React)     │                     │  (Kotlin)    │      │
+│  └──────┬───────┘                     └──────┬───────┘      │
+└─────────┼────────────────────────────────────┼──────────────┘
+          │                                    │
+          └──────────────────┬─────────────────┘
                              │ HTTPS/JSON
                              ▼
           ┌──────────────────────────────────────┐

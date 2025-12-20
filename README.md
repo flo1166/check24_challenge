@@ -6,11 +6,16 @@ This repository contains a complete implementation of the **CHECK24 Home Widgets
 
 **Key Features:**
 - ✅ Server-Driven UI (SDUI) via JSON contracts
-- ✅ Sub-100ms response times with SWR caching
-- ✅ 99.9%+ availability through circuit breakers
+- ✅ SWR caching
+- ✅ availability through circuit breakers
 - ✅ Real-time cache invalidation via Kafka + SSE
-- ✅ Multi-platform support (Web/React, iOS/Swift, Android/Kotlin)
+- ✅ Multi-platform support (Web/React, Android/Kotlin)
 - ✅ Zero client deploys for content/layout changes
+
+---
+
+## Youtube Video:
+https://www.youtube.com/watch?v=6sEaXynZd3o
 
 ---
 
