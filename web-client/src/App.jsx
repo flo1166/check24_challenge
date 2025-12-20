@@ -1,7 +1,9 @@
 /**
  * =========================================================================
- * App.jsx - FIXED: Wait for SSE *AND* data fetch to complete
+ * App.jsx - STATIC VERSION with Mock Data
  * =========================================================================
+ * Modified to use mockDataService instead of real backend API calls.
+ * Perfect for static hosting on Netlify, Vercel, GitHub Pages, etc.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -9,6 +11,9 @@ import MainLayout from './components/layout/MainLayout';
 import HomePage from './pages/HomePage';
 import { NotificationContext } from './contexts/NotificationContext';
 import './styles/index.css';
+
+// Import mock data service
+import mockAPI from './services/mockDataService';
 
 export default function App() {
   const [notifications, setNotifications] = useState({
@@ -23,7 +28,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
 
-  // 🔥 FIX: Track pending fetch promises
+  // Track pending fetch promises
   const pendingFetchResolvers = useRef([]);
 
   const clearWidgets = () => {
@@ -31,33 +36,23 @@ export default function App() {
   };
 
   /**
-   * Fetch widget data from Core Service BFF
+   * Fetch widget data using mock service
    */
   const fetchWidgetData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log('📡 Fetching widget data from /home endpoint...');
+      console.log('📡 Fetching widget data from MOCK service...');
       
-      const response = await fetch('http://localhost:8000/home', {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP Error! Status: ${response.status}`);
-      }
-
-      const jsonData = await response.json();
+      // Use mock API instead of real fetch
+      const jsonData = await mockAPI.fetchHomeData();
       
       console.log(`✅ Widget data received:`, jsonData);
       setData(jsonData);
       setLoading(false);
       
-      // 🔥 FIX: Resolve all pending fetch promises
+      // Resolve all pending fetch promises
       if (pendingFetchResolvers.current.length > 0) {
         console.log(`✅ Resolving ${pendingFetchResolvers.current.length} pending fetch promise(s)`);
         pendingFetchResolvers.current.forEach(resolve => {
@@ -88,8 +83,7 @@ export default function App() {
   }, []);
 
   /**
-   * 🔥 FIX: Wait for SSE event *AND* the subsequent data fetch to complete
-   * Returns the fresh data
+   * Wait for SSE event AND the subsequent data fetch to complete
    */
   const waitForUpdate = useCallback(() => {
     return new Promise((resolve, reject) => {
@@ -117,52 +111,40 @@ export default function App() {
   }, []);
 
   /**
-   * Set up Server-Sent Events for real-time updates
+   * Set up Mock SSE for real-time updates simulation
    */
   useEffect(() => {
     // Initial fetch
     fetchWidgetData();
     
-    // Set up SSE connection for real-time updates
-    console.log('🔌 Establishing SSE connection...');
-    const eventSource = new EventSource('http://localhost:8000/stream/updates');
+    // Set up mock SSE connection
+    console.log('🔌 Establishing MOCK SSE connection...');
     
-    eventSource.onopen = () => {
-      console.log('✅ SSE connection established');
-    };
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log('📨 SSE message received:', data);
+    // Listen for mock SSE events
+    const handleMockSSE = (event) => {
+      const data = event.detail;
+      console.log('📨 Mock SSE message received:', data);
+      
+      if (data.type === 'cache_invalidated') {
+        console.log('🔄 Cache invalidated!');
+        console.log(`   Reason: ${data.reason}`);
         
-        // Handle different message types
-        if (data.type === 'cache_invalidated') {
-          console.log('🔄 Cache invalidated!');
-          console.log(`   Reason: ${data.reason} for user ${data.user_id}`);
-          
-          // 🔥 FIX: Fetch fresh data - this will resolve pending promises when done
-          fetchWidgetData();
-          
-        } else if (data.type === 'connected') {
-          console.log('✅ SSE connection confirmed');
-        } else if (data.type === 'ping') {
-          console.log('💓 SSE keepalive ping');
-        }
-      } catch (error) {
-        console.error('❌ Failed to parse SSE message:', error);
+        // Fetch fresh data
+        fetchWidgetData();
       }
     };
     
-    eventSource.onerror = (error) => {
-      console.error('❌ SSE connection error:', error);
-      console.log('🔄 SSE will attempt to reconnect...');
-    };
+    window.addEventListener('mock-sse-event', handleMockSSE);
+    
+    // Simulate initial connection message
+    setTimeout(() => {
+      console.log('✅ Mock SSE connection established');
+    }, 100);
     
     // Cleanup on unmount
     return () => {
-      console.log('🔌 Closing SSE connection');
-      eventSource.close();
+      console.log('🔌 Closing mock SSE connection');
+      window.removeEventListener('mock-sse-event', handleMockSSE);
     };
   }, [fetchWidgetData]);
 
@@ -186,14 +168,11 @@ export default function App() {
     }));
   };
 
-  /**
-   * 🔥 FIX: Provide waitForUpdate to children
-   */
   const contextValue = {
     notifications,
     updateNotification,
     resetNotification,
-    waitForUpdate  // 🔥 Returns fresh data after SSE + fetch complete
+    waitForUpdate
   };
 
   return (

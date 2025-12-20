@@ -1,31 +1,30 @@
 /**
  * =========================================================================
- * HomePage.jsx - Main Home Page with Dynamic Widget Sections
+ * HomePage.jsx - STATIC VERSION with Mock Data
  * =========================================================================
- * Features:
- * - Insurance Centre with flip cards
- * - Dynamic widget sections grouped by service
- * - Separate rendering for each product service
- * - Support for multiple product services/sections
- * - **NEW:** Widget section collapse/expand state is persisted using localStorage.
+ * Modified to use mockDataService instead of real backend API calls.
  */
 
-import { useState, useCallback, useEffect } from 'react'; // <-- Added useCallback, useEffect
+import { useState, useCallback, useEffect } from 'react';
 import Loader from '../components/common/Loader';
 import { useNotifications } from '../contexts/NotificationContext';
 import InsuranceCentre from '../components/layout/InsuranceCentre';
 import WidgetSection from '../components/widgets/WidgetSection';
 
+// Import mock data service
+import mockAPI from '../services/mockDataService';
+
 // Constant for localStorage key
 const COLLAPSE_STATE_KEY = 'widgetSectionCollapseState';
+
 export default function HomePage({ data, loading, error, onRetry }) {
   const { notifications, waitForUpdate } = useNotifications(); 
   
-  // NEW STATE: Map of serviceKey -> isCollapsed (boolean)
+  // State for collapsed sections
   const [collapsedSections, setCollapsedSections] = useState({});
 
   /**
-   * Effect to load state from localStorage on initial mount
+   * Load collapse state from localStorage on mount
    */
   useEffect(() => {
     try {
@@ -36,10 +35,10 @@ export default function HomePage({ data, loading, error, onRetry }) {
     } catch (e) {
       console.error("Could not load collapse state from localStorage:", e);
     }
-  }, []); // Run only on mount
+  }, []);
 
   /**
-   * Effect to save state to localStorage whenever it changes
+   * Save collapse state to localStorage whenever it changes
    */
   useEffect(() => {
     try {
@@ -47,61 +46,44 @@ export default function HomePage({ data, loading, error, onRetry }) {
     } catch (e) {
       console.error("Could not save collapse state to localStorage:", e);
     }
-  }, [collapsedSections]); // Run whenever collapsedSections changes
+  }, [collapsedSections]);
 
   /**
-   * Toggles the collapsed state for a specific service key and updates localStorage
+   * Toggle collapsed state for a section
    */
   const handleToggleCollapse = useCallback((serviceKey) => {
-    setCollapsedSections(prev => {
-      const newState = {
-        ...prev,
-        // If undefined/null, default to false (expanded) and toggle to true (collapsed)
-        [serviceKey]: !prev[serviceKey], 
-      };
-      // State will be saved by the useEffect hook
-      return newState;
-    });
+    setCollapsedSections(prev => ({
+      ...prev,
+      [serviceKey]: !prev[serviceKey], 
+    }));
   }, []);
 
   /**
-   * Handler factory for adding products to cart by service
+   * Handler factory for adding products to cart
+   * Uses mock API instead of real HTTP calls
    */
-  const createAddToCartHandler = useCallback((serviceKey, apiPort) => {
+  const createAddToCartHandler = useCallback((serviceKey) => {
     return async (widgetData) => {
-      const userId = 123; // TODO: Get from auth context
-      const apiUrl = `http://localhost:${apiPort}/widget/${serviceKey}/contract`;
-      
-      const payload = {
-        user_id: userId,
-        widget_id: widgetData.widget_id,
-      };
+      const userId = 123;
 
       try {
         console.log(`🛒 Adding ${serviceKey} to cart...`);
         
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
+        // Use mock API instead of real fetch
+        const result = await mockAPI.createContract(serviceKey, widgetData, userId);
         
-        if (!response.ok) {
-          throw new Error(`Failed to create contract: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
         console.log(`✅ Contract created for ${serviceKey}:`, result.contract_id);
 
-        // 🔥 FIXED: Wait for SSE event *AND* data fetch to complete
+        // Trigger mock cache invalidation
+        mockAPI.triggerCacheInvalidation(`contract_created_${serviceKey}`, userId);
+
+        // Wait for update
         try {
           console.log('⏳ Waiting for cache invalidation and data refresh...');
           const freshData = await waitForUpdate();
           console.log('✅ Fresh data received, UI will update automatically:', freshData);
           
-          // Also trigger contract refetch
+          // Trigger contract refetch
           window.dispatchEvent(new Event('contracts-updated'));
         } catch (error) {
           console.warn('⚠️ Update timeout, forcing manual refresh');
@@ -117,20 +99,19 @@ export default function HomePage({ data, loading, error, onRetry }) {
   }, [waitForUpdate]);
 
   // Create handlers for each service
-  const handleCarInsuranceAdded = createAddToCartHandler('car-insurance', 8001);
-  const handleHealthInsuranceAdded = createAddToCartHandler('health-insurance', 8002);
-  const handleHouseInsuranceAdded = createAddToCartHandler('house-insurance', 8003);
-  const handleBankingAdded = createAddToCartHandler('banking', 8004);
+  const handleCarInsuranceAdded = createAddToCartHandler('car_insurance');
+  const handleHealthInsuranceAdded = createAddToCartHandler('health_insurance');
+  const handleHouseInsuranceAdded = createAddToCartHandler('house_insurance');
+  const handleBankingAdded = createAddToCartHandler('banking');
 
   /**
-   * Check if any service has valid widgets (not just fallback)
+   * Check if any service has valid widgets
    */
   const hasValidWidgets = () => {
     if (!data?.services) {
       return false;
     }
 
-    // Check if ANY service has valid widgets
     return Object.values(data.services).some(service => {
       const widgets = service.widgets || [];
       return widgets.length > 0 && !widgets.every(
@@ -156,7 +137,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
           <h2 className="text-2xl font-bold text-c24-text-dark mb-3">⚠️ Connection Error</h2>
           <p className="text-c24-text-muted mb-4">{error}</p>
           <p className="text-xs text-c24-text-muted mb-6">
-            Make sure the Core Service (BFF) and Product Services are running.
+            Make sure the mock data service is loaded correctly.
           </p>
           <button 
             onClick={onRetry} 
@@ -184,6 +165,11 @@ export default function HomePage({ data, loading, error, onRetry }) {
         <p className="text-lg opacity-90 mb-8">
           Find the best insurance deals and banking products tailored to your needs
         </p>
+        
+        {/* Demo Badge */}
+        <div className="inline-block bg-c24-highlight-yellow text-c24-primary-deep px-4 py-2 rounded-full text-sm font-bold">
+          🎭 DEMO MODE - Using Mock Data
+        </div>
       </section>
 
       {/* Insurance Centre */}
@@ -193,7 +179,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
         />
       </section>
 
-      {/* Dynamic Widget Sections - Only show if valid widgets exist */}
+      {/* Dynamic Widget Sections */}
       {hasValidWidgets() && (
         <>
           {/* Car Insurance Section */}
@@ -203,7 +189,6 @@ export default function HomePage({ data, loading, error, onRetry }) {
               sectionTitle={services.car_insurance.title}
               onAddToCart={handleCarInsuranceAdded}
               showSectionHeaders={true}
-              // PROP ADDITIONS: Pass the state and toggle handler
               isCollapsed={!!collapsedSections['car_insurance']}
               onToggleCollapse={() => handleToggleCollapse('car_insurance')}
             />
@@ -216,7 +201,6 @@ export default function HomePage({ data, loading, error, onRetry }) {
               sectionTitle={services.health_insurance.title}
               onAddToCart={handleHealthInsuranceAdded}
               showSectionHeaders={true}
-              // PROP ADDITIONS: Pass the state and toggle handler
               isCollapsed={!!collapsedSections['health_insurance']}
               onToggleCollapse={() => handleToggleCollapse('health_insurance')}
             />
@@ -229,7 +213,6 @@ export default function HomePage({ data, loading, error, onRetry }) {
               sectionTitle={services.house_insurance.title}
               onAddToCart={handleHouseInsuranceAdded}
               showSectionHeaders={true}
-              // PROP ADDITIONS: Pass the state and toggle handler
               isCollapsed={!!collapsedSections['house_insurance']}
               onToggleCollapse={() => handleToggleCollapse('house_insurance')}
             />
@@ -242,7 +225,6 @@ export default function HomePage({ data, loading, error, onRetry }) {
               sectionTitle={services.banking.title}
               onAddToCart={handleBankingAdded}
               showSectionHeaders={true}
-              // PROP ADDITIONS: Pass the state and toggle handler
               isCollapsed={!!collapsedSections['banking']}
               onToggleCollapse={() => handleToggleCollapse('banking')}
             />
@@ -250,7 +232,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
         </>
       )}
 
-      {/* Empty State - No Widgets */}
+      {/* Empty State */}
       {!hasValidWidgets() && (
         <div className="text-center py-16">
           <div className="bg-white p-8 rounded-c24-lg shadow-c24-md inline-block">

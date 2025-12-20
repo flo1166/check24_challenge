@@ -1,12 +1,8 @@
 /**
  * =========================================================================
- * InsuranceCentre.jsx - Insurance Category Centre with Delete Functionality
+ * InsuranceCentre.jsx - STATIC VERSION with Mock Data
  * =========================================================================
- * Interactive insurance category showcase with flip-card animations.
- * Shows icon tiles (Car, Health, House, Money) that unlock on purchase
- * and flip to reveal contract details on hover.
- * 
- * ✅ FIX: Added event listener to refetch contracts when 'contracts-updated' event is dispatched
+ * Modified to use mockDataService instead of real backend API calls.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -16,7 +12,10 @@ import { getImageUrl } from '../../utils/imageLoader';
 import '../../styles/InsuranceCentre.css';
 import '../../styles/components.css';
 
-// --- Configuration ---
+// Import mock data service
+import mockAPI from '../../services/mockDataService';
+
+// Configuration
 const CATEGORY_MAP = {
   car: 'car_insurance',
   health: 'health_insurance',
@@ -38,8 +37,6 @@ const categories = [
   { id: 'money', label: 'Money & Banking', icon: 'money', description: 'View your banking & investment products' },
 ];
 
-// --- Component ---
-
 export default function InsuranceCentre({ 
   cartCount = 0, 
   selectedCarInsurance = null, 
@@ -52,33 +49,27 @@ export default function InsuranceCentre({
   const [flippedCards, setFlippedCards] = useState({});
   const [contracts, setContracts] = useState({}); 
   const [loading, setLoading] = useState(true);
-  const { notifications, waitForSSEUpdate } = useNotifications();
+  const { notifications, waitForUpdate } = useNotifications();
 
-
-  // 1. Core Logic: Fetch and Process ALL Contracts from Backend
+  /**
+   * Fetch user contracts using mock API
+   */
   const fetchUserContracts = useCallback(async () => {
     try {
       setLoading(true);
-      const userId = 123; // TODO: Get from auth context
+      const userId = 123;
       
-      console.log('🔄 [InsuranceCentre] Fetching contracts...');
-      const response = await fetch(`http://localhost:8000/user/${userId}/contracts`);
+      console.log('🔄 [InsuranceCentre] Fetching contracts from MOCK API...');
       
-      if (!response.ok) {
-        console.warn('⚠️ Failed to fetch contracts:', response.status);
-        setLoading(false);
-        return;
-      }
-
-      const jsonData = await response.json();
+      // Use mock API instead of real fetch
+      const jsonData = await mockAPI.fetchUserContracts(userId);
+      
       console.log('✅ [InsuranceCentre] Contracts received:', jsonData);
 
       if (jsonData.has_contract && jsonData.contracts) {
-        
         const newContracts = {};
         const newUnlockedStatus = {};
 
-        // Iterate through the local categories definition
         categories.forEach(category => {
           const serviceKey = CATEGORY_MAP[category.id];
           const contractData = jsonData.contracts[serviceKey];
@@ -90,7 +81,6 @@ export default function InsuranceCentre({
           }
         });
 
-        // Update states once with the consolidated data
         setContracts(newContracts);
         setUnlockedCategories(prev => ({
           ...prev, 
@@ -98,7 +88,6 @@ export default function InsuranceCentre({
         }));
         
         console.log(`✅ [InsuranceCentre] ${Object.keys(newContracts).length} contracts loaded`);
-
       } else {
         console.log('ℹ️ [InsuranceCentre] No contracts found');
       }
@@ -110,12 +99,12 @@ export default function InsuranceCentre({
     }
   }, []);
 
-  // 2. Fetch contracts on mount
+  // Fetch contracts on mount
   useEffect(() => {
     fetchUserContracts();
   }, [fetchUserContracts]);
 
-  // 🔥 NEW: Listen for contract updates from HomePage
+  // Listen for contract updates
   useEffect(() => {
     const handleRefresh = () => {
       console.log('🔄 [InsuranceCentre] Contracts updated event received - refetching...');
@@ -129,8 +118,7 @@ export default function InsuranceCentre({
     };
   }, [fetchUserContracts]);
 
-  // 3. Handling external updates (Contract Purchases/Selections)
-  // This provides IMMEDIATE feedback while waiting for backend refetch
+  // Handle external products
   const externalProducts = [
     { prop: selectedCarInsurance, id: 'car' },
     { prop: selectedHealthInsurance, id: 'health' },
@@ -156,8 +144,7 @@ export default function InsuranceCentre({
     }
   }, [selectedCarInsurance, selectedHealthInsurance, selectedHouseInsurance, selectedBankingProduct]);
 
-  // --- Rendering & Utility Functions ---
-
+  // Toggle flip state
   const toggleFlip = (categoryId) => {
     setFlippedCards(prev => ({
       ...prev,
@@ -165,6 +152,7 @@ export default function InsuranceCentre({
     }));
   };
 
+  // Icon map
   const iconMap = {
     car: Car,
     health: Heart,
@@ -177,7 +165,7 @@ export default function InsuranceCentre({
     return IconComponent ? <IconComponent className="insurance-icon" size={80} strokeWidth={1.5} /> : null;
   };
 
-  // Render the back of the card with contract details
+  // Render card back
   const renderCardBack = (category) => {
     const contract = contracts[category.id]; 
     
@@ -195,10 +183,8 @@ export default function InsuranceCentre({
       );
     }
 
-    // Try multiple ways to extract the data
     let contractData = contract.data || contract;
     
-    // Check if data is nested further
     if (contractData && typeof contractData === 'object' && !contractData.title) {
       if (contractData.data) {
         contractData = contractData.data;
@@ -209,35 +195,22 @@ export default function InsuranceCentre({
     const imageUrl = getImageUrl(contractData?.image_url);
     const widgetId = contractData?.widget_id || contract.widget_id;
 
-    // Handle delete action
+    // Handle delete with mock API
     const handleDelete = async (e) => {
-      e.stopPropagation(); // Prevent card flip
+      e.stopPropagation();
       
       try {
-        const userId = 123; // TODO: Get from auth context
+        const userId = 123;
         const serviceKey = API_SERVICE_MAP[category.id];
         
         console.log(`🗑️ Deleting contract: user ${userId}, service ${serviceKey}, widget ${widgetId}`);
         
-        const response = await fetch(
-          `http://localhost:8000/user/${userId}/contract/${serviceKey}/${widgetId}`,
-          {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        // Use mock API instead of real fetch
+        const result = await mockAPI.deleteContract(userId, serviceKey, widgetId);
         
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ detail: response.statusText }));
-          throw new Error(errorData.detail || `Failed to delete contract: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
         console.log('✅ Contract deleted:', result);
         
-        // Optimistic update - remove from local state immediately
+        // Optimistic update
         setContracts(prev => {
           const newContracts = { ...prev };
           delete newContracts[category.id];
@@ -254,13 +227,15 @@ export default function InsuranceCentre({
           [category.id]: false
         }));
         
-        // 🔥 FIXED: Wait for SSE event *AND* data fetch to complete
+        // Trigger mock cache invalidation
+        mockAPI.triggerCacheInvalidation(`contract_deleted_${serviceKey}`, userId);
+        
+        // Wait for update
         try {
           console.log('⏳ Waiting for cache invalidation and data refresh...');
           const freshData = await waitForUpdate();
           console.log('✅ Fresh data received:', freshData);
           
-          // Trigger contracts refetch in this component
           fetchUserContracts();
         } catch (error) {
           console.warn('⚠️ Update timeout, forcing manual refresh');
@@ -270,15 +245,13 @@ export default function InsuranceCentre({
         
       } catch (error) {
         console.error('❌ Failed to delete contract:', error);
-        // TODO: Show error toast to user
-        
-        // Revert optimistic update on error
         fetchUserContracts();
       }
     };
+
     return (
       <div className="insurance-tile-back relative">
-        {/* Delete Button - Top Right Corner */}
+        {/* Delete Button */}
         <button
           onClick={handleDelete}
           className="absolute top-2 right-2 z-10 w-8 h-8 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg"
@@ -331,7 +304,6 @@ export default function InsuranceCentre({
 
                   <h3 className="insurance-tile-label">{category.label}</h3>
                   
-                  {/* Show badge if has contract */}
                   {hasContract && (
                     <div className="contract-badge">
                       <span className="badge-text">Active</span>
@@ -339,7 +311,7 @@ export default function InsuranceCentre({
                   )}
                 </div>
 
-                {/* Back of card - only show if unlocked */}
+                {/* Back of card */}
                 {isUnlocked && renderCardBack(category)}
               </div>
             </div>
