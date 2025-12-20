@@ -544,6 +544,9 @@ export function createContract(serviceKey, widgetData, userId = MOCK_USER_ID) {
         data: widgetData.data || widgetData
       };
 
+      // Automatically trigger cache invalidation
+      triggerCacheInvalidation(`contract_created_${serviceKey}`, userId);
+
       resolve({
         contract_id: `${serviceKey}_${widgetData.widget_id}_${Date.now()}`,
         widget_id: widgetData.widget_id,
@@ -567,6 +570,9 @@ export function deleteContract(userId, serviceKey, widgetId) {
       }
 
       userContracts[serviceKey] = null;
+
+      // Automatically trigger cache invalidation
+      triggerCacheInvalidation(`contract_deleted_${serviceKey}`, userId);
 
       resolve({
         success: true,

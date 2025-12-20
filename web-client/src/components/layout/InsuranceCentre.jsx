@@ -24,9 +24,9 @@ const CATEGORY_MAP = {
 };
 
 const API_SERVICE_MAP = {
-  car: 'car',
-  health: 'health',
-  house: 'house',
+  car: 'car_insurance',
+  health: 'health_insurance',
+  house: 'house_insurance',
   money: 'banking',
 };
 
@@ -210,7 +210,7 @@ export default function InsuranceCentre({
         
         console.log('✅ Contract deleted:', result);
         
-        // Optimistic update
+        // Optimistic update - remove immediately from UI
         setContracts(prev => {
           const newContracts = { ...prev };
           delete newContracts[category.id];
@@ -227,24 +227,15 @@ export default function InsuranceCentre({
           [category.id]: false
         }));
         
-        // Trigger mock cache invalidation
-        mockAPI.triggerCacheInvalidation(`contract_deleted_${serviceKey}`, userId);
-        
-        // Wait for update
-        try {
-          console.log('⏳ Waiting for cache invalidation and data refresh...');
-          const freshData = await waitForUpdate();
-          console.log('✅ Fresh data received:', freshData);
-          
+        // The mockAPI.deleteContract already triggered cache invalidation
+        // Just refresh the contracts to sync state
+        setTimeout(() => {
           fetchUserContracts();
-        } catch (error) {
-          console.warn('⚠️ Update timeout, forcing manual refresh');
-          window.dispatchEvent(new Event('contracts-updated'));
-          window.dispatchEvent(new Event('widgets-updated'));
-        }
+        }, 500);
         
       } catch (error) {
         console.error('❌ Failed to delete contract:', error);
+        // On error, refresh to get correct state
         fetchUserContracts();
       }
     };

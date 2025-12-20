@@ -22,6 +22,69 @@ export default function HomePage({ data, loading, error, onRetry }) {
   
   // State for collapsed sections
   const [collapsedSections, setCollapsedSections] = useState({});
+  
+  // NEW: State for active contracts
+  const [activeContracts, setActiveContracts] = useState({
+    car_insurance: false,
+    health_insurance: false,
+    house_insurance: false,
+    banking: false
+  });
+
+  /**
+   * NEW: Fetch user contracts to determine which sections to hide
+   */
+  const fetchActiveContracts = useCallback(async () => {
+    try {
+      const userId = 123;
+      const contractsData = await mockAPI.fetchUserContracts(userId);
+      
+      // Always update based on current contract state
+      const activeStatus = {
+        car_insurance: !!(contractsData.contracts?.car_insurance),
+        health_insurance: !!(contractsData.contracts?.health_insurance),
+        house_insurance: !!(contractsData.contracts?.house_insurance),
+        banking: !!(contractsData.contracts?.banking)
+      };
+      
+      setActiveContracts(activeStatus);
+      console.log('📋 Active contracts updated:', activeStatus);
+      
+    } catch (error) {
+      console.error('❌ Failed to fetch active contracts:', error);
+    }
+  }, []);
+
+  /**
+   * NEW: Listen for contract changes to update visibility
+   */
+  useEffect(() => {
+    fetchActiveContracts();
+    
+    const handleContractUpdate = () => {
+      console.log('🔄 Contract updated, refreshing active contracts...');
+      fetchActiveContracts();
+    };
+    
+    const handleMockSSE = (event) => {
+      const data = event.detail;
+      if (data.type === 'cache_invalidated') {
+        console.log('🔄 Cache invalidated, refreshing active contracts...');
+        // Small delay to ensure mock API state is updated
+        setTimeout(() => {
+          fetchActiveContracts();
+        }, 100);
+      }
+    };
+    
+    window.addEventListener('contracts-updated', handleContractUpdate);
+    window.addEventListener('mock-sse-event', handleMockSSE);
+    
+    return () => {
+      window.removeEventListener('contracts-updated', handleContractUpdate);
+      window.removeEventListener('mock-sse-event', handleMockSSE);
+    };
+  }, [fetchActiveContracts]);
 
   /**
    * Load collapse state from localStorage on mount
@@ -74,29 +137,18 @@ export default function HomePage({ data, loading, error, onRetry }) {
         
         console.log(`✅ Contract created for ${serviceKey}:`, result.contract_id);
 
-        // Trigger mock cache invalidation
-        mockAPI.triggerCacheInvalidation(`contract_created_${serviceKey}`, userId);
-
-        // Wait for update
-        try {
-          console.log('⏳ Waiting for cache invalidation and data refresh...');
-          const freshData = await waitForUpdate();
-          console.log('✅ Fresh data received, UI will update automatically:', freshData);
-          
-          // Trigger contract refetch
+        // The mockAPI.createContract already triggered cache invalidation
+        // Just trigger contract refetch event
+        setTimeout(() => {
           window.dispatchEvent(new Event('contracts-updated'));
-        } catch (error) {
-          console.warn('⚠️ Update timeout, forcing manual refresh');
-          window.dispatchEvent(new Event('contracts-updated'));
-          window.dispatchEvent(new Event('widgets-updated'));
-        }
+        }, 500);
                 
       } catch (error) {
         console.error(`❌ Failed to save ${serviceKey} contract:`, error);
         // TODO: Show error toast to user
       }
     };
-  }, [waitForUpdate]);
+  }, []);
 
   // Create handlers for each service
   const handleCarInsuranceAdded = createAddToCartHandler('car_insurance');
@@ -168,7 +220,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
         
         {/* Demo Badge */}
         <div className="inline-block bg-c24-highlight-yellow text-c24-primary-deep px-4 py-2 rounded-full text-sm font-bold">
-          🎭 DEMO MODE - Using Mock Data
+          DEMO MODE - Using Mock Data (avoid costs + security risks)
         </div>
       </section>
 
@@ -179,11 +231,11 @@ export default function HomePage({ data, loading, error, onRetry }) {
         />
       </section>
 
-      {/* Dynamic Widget Sections */}
+      {/* Dynamic Widget Sections - Only show if user doesn't have an active contract */}
       {hasValidWidgets() && (
         <>
-          {/* Car Insurance Section */}
-          {services.car_insurance?.widgets?.length > 0 && (
+          {/* Car Insurance Section - Hide if user has active car insurance */}
+          {services.car_insurance?.widgets?.length > 0 && !activeContracts.car_insurance && (
             <WidgetSection
               widgets={services.car_insurance.widgets}
               sectionTitle={services.car_insurance.title}
@@ -194,8 +246,8 @@ export default function HomePage({ data, loading, error, onRetry }) {
             />
           )}
 
-          {/* Health Insurance Section */}
-          {services.health_insurance?.widgets?.length > 0 && (
+          {/* Health Insurance Section - Hide if user has active health insurance */}
+          {services.health_insurance?.widgets?.length > 0 && !activeContracts.health_insurance && (
             <WidgetSection
               widgets={services.health_insurance.widgets}
               sectionTitle={services.health_insurance.title}
@@ -206,8 +258,8 @@ export default function HomePage({ data, loading, error, onRetry }) {
             />
           )}
 
-          {/* House Insurance Section */}
-          {services.house_insurance?.widgets?.length > 0 && (
+          {/* House Insurance Section - Hide if user has active house insurance */}
+          {services.house_insurance?.widgets?.length > 0 && !activeContracts.house_insurance && (
             <WidgetSection
               widgets={services.house_insurance.widgets}
               sectionTitle={services.house_insurance.title}
@@ -218,8 +270,8 @@ export default function HomePage({ data, loading, error, onRetry }) {
             />
           )}
 
-          {/* Banking Section */}
-          {services.banking?.widgets?.length > 0 && (
+          {/* Banking Section - Hide if user has active banking product */}
+          {services.banking?.widgets?.length > 0 && !activeContracts.banking && (
             <WidgetSection
               widgets={services.banking.widgets}
               sectionTitle={services.banking.title}
@@ -232,7 +284,29 @@ export default function HomePage({ data, loading, error, onRetry }) {
         </>
       )}
 
-      {/* Empty State */}
+      {/* NEW: Message when all sections are hidden because user has contracts */}
+      {hasValidWidgets() && 
+       activeContracts.car_insurance && 
+       activeContracts.health_insurance && 
+       activeContracts.house_insurance && 
+       activeContracts.banking && (
+        <div className="text-center py-16">
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-8 rounded-c24-lg shadow-c24-md inline-block border-2 border-green-200">
+            <div className="text-6xl mb-4">✅</div>
+            <h3 className="text-2xl font-bold text-c24-text-dark mb-3">
+              You're All Set!
+            </h3>
+            <p className="text-c24-text-muted mb-6 max-w-md">
+              You have active contracts for all our services. Check your Insurance Centre above to manage your coverage.
+            </p>
+            <p className="text-sm text-green-700 font-semibold">
+              💡 Delete a contract from the Insurance Centre to see more options
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State - No widgets available */}
       {!hasValidWidgets() && (
         <div className="text-center py-16">
           <div className="bg-white p-8 rounded-c24-lg shadow-c24-md inline-block">
