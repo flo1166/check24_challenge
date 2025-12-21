@@ -1,16 +1,16 @@
 /**
  * =========================================================================
- * HomePage.jsx - Main Home Page with Dynamic Widget Sections
+ * HomePage.jsx - Component-Based Dynamic Widget Rendering  
  * =========================================================================
  * Features:
  * - Insurance Centre with flip cards
  * - Dynamic widget sections grouped by service
- * - Separate rendering for each product service
- * - Support for multiple product services/sections
- * - **NEW:** Widget section collapse/expand state is persisted using localStorage.
+ * - Passes entire serviceData with components to WidgetSection
+ * - Maintains collapse/expand state with localStorage
+ * - WidgetSection renders components in order
  */
 
-import { useState, useCallback, useEffect } from 'react'; // <-- Added useCallback, useEffect
+import { useState, useCallback, useEffect } from 'react';
 import Loader from '../components/common/Loader';
 import { useNotifications } from '../contexts/NotificationContext';
 import InsuranceCentre from '../components/layout/InsuranceCentre';
@@ -18,14 +18,15 @@ import WidgetSection from '../components/widgets/WidgetSection';
 
 // Constant for localStorage key
 const COLLAPSE_STATE_KEY = 'widgetSectionCollapseState';
+
 export default function HomePage({ data, loading, error, onRetry }) {
   const { notifications, waitForUpdate } = useNotifications(); 
   
-  // NEW STATE: Map of serviceKey -> isCollapsed (boolean)
+  // State: Map of serviceKey -> isCollapsed (boolean)
   const [collapsedSections, setCollapsedSections] = useState({});
 
   /**
-   * Effect to load state from localStorage on initial mount
+   * Load collapse state from localStorage on mount
    */
   useEffect(() => {
     try {
@@ -36,10 +37,10 @@ export default function HomePage({ data, loading, error, onRetry }) {
     } catch (e) {
       console.error("Could not load collapse state from localStorage:", e);
     }
-  }, []); // Run only on mount
+  }, []);
 
   /**
-   * Effect to save state to localStorage whenever it changes
+   * Save collapse state to localStorage whenever it changes
    */
   useEffect(() => {
     try {
@@ -47,20 +48,29 @@ export default function HomePage({ data, loading, error, onRetry }) {
     } catch (e) {
       console.error("Could not save collapse state to localStorage:", e);
     }
-  }, [collapsedSections]); // Run whenever collapsedSections changes
+  }, [collapsedSections]);
 
   /**
-   * Toggles the collapsed state for a specific service key and updates localStorage
+   * Toggle collapsed state for a service
    */
   const handleToggleCollapse = useCallback((serviceKey) => {
-    setCollapsedSections(prev => {
-      const newState = {
-        ...prev,
-        // If undefined/null, default to false (expanded) and toggle to true (collapsed)
-        [serviceKey]: !prev[serviceKey], 
-      };
-      // State will be saved by the useEffect hook
-      return newState;
+    setCollapsedSections(prev => ({
+      ...prev,
+      [serviceKey]: !prev[serviceKey], 
+    }));
+  }, []);
+
+  /**
+   * Check if a service has valid components with widgets
+   */
+  const hasValidComponents = useCallback((service) => {
+    if (!service?.components) return false;
+    
+    return service.components.some(component => {
+      const widgets = component.widgets || [];
+      return widgets.length > 0 && !widgets.every(
+        w => w.widget_id === 'fallback_error_card'
+      );
     });
   }, []);
 
@@ -95,7 +105,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
         const result = await response.json();
         console.log(`✅ Contract created for ${serviceKey}:`, result.contract_id);
 
-        // 🔥 FIXED: Wait for SSE event *AND* data fetch to complete
+        // Wait for SSE event *AND* data fetch to complete
         try {
           console.log('⏳ Waiting for cache invalidation and data refresh...');
           const freshData = await waitForUpdate();
@@ -123,20 +133,11 @@ export default function HomePage({ data, loading, error, onRetry }) {
   const handleBankingAdded = createAddToCartHandler('banking', 8004);
 
   /**
-   * Check if any service has valid widgets (not just fallback)
+   * Check if ANY service has valid components
    */
-  const hasValidWidgets = () => {
-    if (!data?.services) {
-      return false;
-    }
-
-    // Check if ANY service has valid widgets
-    return Object.values(data.services).some(service => {
-      const widgets = service.widgets || [];
-      return widgets.length > 0 && !widgets.every(
-        widget => widget.widget_id === 'fallback_error_card'
-      );
-    });
+  const hasAnyValidComponents = () => {
+    if (!data?.services) return false;
+    return Object.values(data.services).some(hasValidComponents);
   };
 
   // Loading State
@@ -193,56 +194,48 @@ export default function HomePage({ data, loading, error, onRetry }) {
         />
       </section>
 
-      {/* Dynamic Widget Sections - Only show if valid widgets exist */}
-      {hasValidWidgets() && (
+      {/* Dynamic Widget Sections - Pass serviceData to WidgetSection */}
+      {hasAnyValidComponents() && (
         <>
           {/* Car Insurance Section */}
-          {services.car_insurance?.widgets?.length > 0 && (
+          {hasValidComponents(services.car_insurance) && (
             <WidgetSection
-              widgets={services.car_insurance.widgets}
-              sectionTitle={services.car_insurance.title}
+              serviceData={services.car_insurance}
               onAddToCart={handleCarInsuranceAdded}
               showSectionHeaders={true}
-              // PROP ADDITIONS: Pass the state and toggle handler
               isCollapsed={!!collapsedSections['car_insurance']}
               onToggleCollapse={() => handleToggleCollapse('car_insurance')}
             />
           )}
 
           {/* Health Insurance Section */}
-          {services.health_insurance?.widgets?.length > 0 && (
+          {hasValidComponents(services.health_insurance) && (
             <WidgetSection
-              widgets={services.health_insurance.widgets}
-              sectionTitle={services.health_insurance.title}
+              serviceData={services.health_insurance}
               onAddToCart={handleHealthInsuranceAdded}
               showSectionHeaders={true}
-              // PROP ADDITIONS: Pass the state and toggle handler
               isCollapsed={!!collapsedSections['health_insurance']}
               onToggleCollapse={() => handleToggleCollapse('health_insurance')}
             />
           )}
 
           {/* House Insurance Section */}
-          {services.house_insurance?.widgets?.length > 0 && (
+          {hasValidComponents(services.house_insurance) && (
             <WidgetSection
-              widgets={services.house_insurance.widgets}
-              sectionTitle={services.house_insurance.title}
+              serviceData={services.house_insurance}
               onAddToCart={handleHouseInsuranceAdded}
               showSectionHeaders={true}
-              // PROP ADDITIONS: Pass the state and toggle handler
               isCollapsed={!!collapsedSections['house_insurance']}
               onToggleCollapse={() => handleToggleCollapse('house_insurance')}
             />
           )}
 
           {/* Banking Section */}
-          {services.banking?.widgets?.length > 0 && (
+          {hasValidComponents(services.banking) && (
             <WidgetSection
-              widgets={services.banking.widgets}
-              sectionTitle={services.banking.title}
+              serviceData={services.banking}
               onAddToCart={handleBankingAdded}
               showSectionHeaders={true}
-              // PROP ADDITIONS: Pass the state and toggle handler
               isCollapsed={!!collapsedSections['banking']}
               onToggleCollapse={() => handleToggleCollapse('banking')}
             />
@@ -251,7 +244,7 @@ export default function HomePage({ data, loading, error, onRetry }) {
       )}
 
       {/* Empty State - No Widgets */}
-      {!hasValidWidgets() && (
+      {!hasAnyValidComponents() && (
         <div className="text-center py-16">
           <div className="bg-white p-8 rounded-c24-lg shadow-c24-md inline-block">
             <h3 className="text-2xl font-bold text-c24-text-dark mb-3">

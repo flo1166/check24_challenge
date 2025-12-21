@@ -1,113 +1,184 @@
 /**
  * =========================================================================
- * WidgetSection.jsx - Dynamic Widget Section Renderer
+ * WidgetSection.jsx - Component-Based Widget Section Renderer
  * =========================================================================
- * Intelligently groups and renders widgets based on their component_type.
- * * Supported layouts:
- * - Card widgets → ProductCarousel (horizontal scrolling)
- * - InfoBox widgets → InfoBoxGrid (2-column grid)
- * - SectionHeader widgets → Rendered inline with collapse functionality
- * * NOTE: The collapse state (isCollapsed) is now managed by the parent 
- * component (HomePage) for state persistence.
+ * Renders widgets grouped by their component structure from the API.
+ * Each component is rendered separately based on component_order.
+ * 
+ * Supported component types:
+ * - ProductGrid: Grid of products
+ * - Card: Carousel of cards
+ * - InfoBox: Grid of info boxes
+ * - SectionHeader: Section header with collapse
  */
 
-import { useMemo } from 'react'; // <-- Removed useState
+import { useMemo } from 'react';
 import ProductCarousel from './ProductCarousel';
 import InfoBoxGrid from './InfoBoxGrid';
 import SectionHeader from './SectionHeader';
 import ProductGrid from './ProductGrid';
 
-export default function WidgetSection({ 
-  widgets, 
-  sectionTitle, 
-  onAddToCart,
-  showSectionHeaders = true,
-  // --- NEW PROPS FOR PERSISTENCE ---
-  isCollapsed,        
-  onToggleCollapse    
-  // --- END NEW PROPS ---
-}) {
-  // Removed: const [isCollapsed, setIsCollapsed] = useState(false);
-
-  /**
-   * Group widgets by their component_type
-   * Returns an object like:
-   * {
-   *   Card: [...cardWidgets],
-   *   InfoBox: [...infoBoxWidgets],
-   *   SectionHeader: [...headerWidgets]
-   * }
-   */
-  const groupedWidgets = useMemo(() => {
-    if (!widgets || widgets.length === 0) return {};
-
-    return widgets.reduce((groups, widget) => {
-      const type = widget.component_type || 'Card'; 
-      if (!groups[type]) {
-        groups[type] = [];
-      }
-      groups[type].push(widget);
-      return groups;
-    }, {});
-  }, [widgets]);
-
-  // Check if we have any widgets to render
-  const hasWidgets = Object.keys(groupedWidgets).length > 0;
-
-  if (!hasWidgets) {
+/**
+ * Renders a single component based on its type
+ */
+function ComponentRenderer({ component, onAddToCart }) {
+  const { component_type, widgets = [] } = component;
+  
+  // Filter out fallback widgets
+  const validWidgets = widgets.filter(w => w.widget_id !== 'fallback_error_card');
+  
+  if (validWidgets.length === 0 && component_type !== 'SectionHeader') {
     return null;
   }
 
-  // Toggle collapsed state now calls the parent handler
-  const handleToggle = onToggleCollapse;
+  switch (component_type) {
+    case 'ProductGrid':
+      // ProductGrid expects the first widget's data
+      return (
+        <div className="mb-8">
+          <ProductGrid 
+            widgetData={validWidgets[0]} 
+            onAddToCart={onAddToCart}
+          />
+        </div>
+      );
+
+    case 'Card':
+      // Cards render in ProductCarousel
+      return (
+        <div className="mb-8">
+          <ProductCarousel 
+            widgets={validWidgets}
+            onAddToCart={onAddToCart}
+          />
+        </div>
+      );
+
+    case 'InfoBox':
+      // InfoBoxes render in InfoBoxGrid
+      return (
+        <div className="mb-8">
+          <InfoBoxGrid 
+            widgets={validWidgets}
+          />
+        </div>
+      );
+
+    case 'SectionHeader':
+      // SectionHeader renders individually
+      if (validWidgets.length === 0) return null;
+      return (
+        <div className="mb-6">
+          <SectionHeader 
+            data={validWidgets[0].data || validWidgets[0]}
+          />
+        </div>
+      );
+
+    default:
+      console.warn(`Unknown component_type: ${component_type}`);
+      return null;
+  }
+}
+
+/**
+ * Main WidgetSection Component
+ * Renders components from a service in order
+ */
+export default function WidgetSection({ 
+  serviceData,
+  onAddToCart,
+  showSectionHeaders = true,
+  isCollapsed,        
+  onToggleCollapse    
+}) {
+  const { title, components = [] } = serviceData;
+
+  /**
+   * Sort components by component_order
+   */
+  const sortedComponents = useMemo(() => {
+    return [...components].sort((a, b) => 
+      (a.component_order || 0) - (b.component_order || 0)
+    );
+  }, [components]);
+
+  /**
+   * Count total valid widgets across all components
+   */
+  const totalWidgets = useMemo(() => {
+    return sortedComponents.reduce((sum, component) => {
+      const validWidgets = (component.widgets || []).filter(
+        w => w.widget_id !== 'fallback_error_card'
+      );
+      return sum + validWidgets.length;
+    }, 0);
+  }, [sortedComponents]);
+
+  if (totalWidgets === 0) {
+    return null;
+  }
+
+  // Find SectionHeader component if exists
+  const sectionHeaderComponent = sortedComponents.find(
+    c => c.component_type === 'SectionHeader'
+  );
 
   return (
-    <div className="widget-section">
-      {/* Render SectionHeader widgets first (if enabled) */}
-      {showSectionHeaders && groupedWidgets.SectionHeader && (
+    <div className="widget-section mb-12">
+      {/* Section Header */}
+      {showSectionHeaders && (
         <div className="mb-8">
-          {groupedWidgets.SectionHeader
-            .sort((a, b) => (a.priority || 0) - (b.priority || 0))
-            .map((widget, index) => (
-              <div key={widget.widget_id || index} className="mb-6">
-                <SectionHeader 
-                  data={widget.data || widget} 
-                  onToggle={handleToggle} // <-- Uses prop handler
-                  isCollapsed={isCollapsed} // <-- Uses prop state
-                />
+          {sectionHeaderComponent ? (
+            // Use SectionHeader from data
+            <SectionHeader 
+              data={sectionHeaderComponent.widgets[0]?.data || {}}
+              onToggle={onToggleCollapse}
+              isCollapsed={isCollapsed}
+            />
+          ) : (
+            // Fallback: use service title
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-c24-primary-deep mb-2">
+                  {title}
+                </h2>
+                <p className="text-c24-text-muted text-sm">
+                  {totalWidgets} {totalWidgets === 1 ? 'deal' : 'deals'} available
+                </p>
               </div>
-            ))}
+              
+              {onToggleCollapse && (
+                <button
+                  onClick={onToggleCollapse}
+                  className="flex items-center gap-2 px-4 py-2 text-c24-primary-medium hover:text-c24-hover-blue transition-colors font-semibold"
+                >
+                  {isCollapsed ? 'Show' : 'Hide'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Only render content widgets if NOT collapsed */}
+      {/* Render Components in Order */}
       {!isCollapsed && (
-        <>
-          {/* Render Card widgets in a carousel */}
-          {groupedWidgets.Card && groupedWidgets.Card.length > 0 && (
-            <ProductCarousel 
-              widgets={groupedWidgets.Card}
-              onAddToCart={onAddToCart}
-              title={!showSectionHeaders ? sectionTitle : undefined}
-            />
-          )}
+        <div className="space-y-6">
+          {sortedComponents.map((component, index) => {
+            // Skip SectionHeader since we rendered it above
+            if (component.component_type === 'SectionHeader') {
+              return null;
+            }
 
-          {/* Render InfoBox widgets in a grid */}
-          {groupedWidgets.InfoBox && groupedWidgets.InfoBox.length > 0 && (
-            <InfoBoxGrid 
-              widgets={groupedWidgets.InfoBox}
-              title={groupedWidgets.Card ? "More Options" : undefined}
-            />
-          )}
-          {groupedWidgets.ProductGrid && groupedWidgets.ProductGrid.length > 0 && (
-            <ProductGrid 
-                widgetData={groupedWidgets.ProductGrid[0]} 
+            return (
+              <ComponentRenderer
+                key={`${component.component_id}-${index}`}
+                component={component}
                 onAddToCart={onAddToCart}
-            />
-          )}
-
-          {/* Future: Add more layout types here */}
-        </>
+              />
+            );
+          })}
+        </div>
       )}
     </div>
   );

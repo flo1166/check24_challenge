@@ -1,16 +1,25 @@
 package com.check24.app.data.model
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class HomeResponse(
     val services: Map<String, ServiceData>? = null
 )
 
+// 🔥 UPDATED: ServiceData now contains components instead of flat widgets
 @Serializable
 data class ServiceData(
     val title: String,
+    val components: List<Component> = emptyList()  // ← Changed from widgets to components
+)
+
+// 🔥 NEW: Component structure
+@Serializable
+data class Component(
+    val component_id: String,
+    val component_order: Int = 0,
+    val component_type: String,  // "ProductGrid", "Card", "InfoBox", "SectionHeader"
     val widgets: List<Widget> = emptyList()
 )
 
@@ -18,6 +27,8 @@ data class ServiceData(
 data class Widget(
     val widget_id: String,
     val component_type: String,
+    val component_id: String? = null,
+    val component_order: Int = 0,
     val priority: Int = 0,
     val data: WidgetData? = null,
     val service: String? = null
@@ -46,7 +57,7 @@ data class ProductGridData(
 
 @Serializable
 data class Pricing(
-    val price: Double? = null,  // Changed from String to Double
+    val price: Double? = null,
     val currency: String? = "€",
     val frequency: String? = null
 )
@@ -65,7 +76,7 @@ data class ProductData(
     val content: String? = null,
     val image_url: String? = null,
     val pricing: Pricing? = null,
-    val rating: Double? = null  // Changed from Rating? to Double? for ProductGrid products
+    val rating: Double? = null
 )
 
 @Serializable

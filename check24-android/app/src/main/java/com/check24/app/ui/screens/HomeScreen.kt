@@ -54,22 +54,28 @@ fun HomeScreen(
                         InsuranceCentre(contracts = uiState.contracts)
                     }
 
-                    // Dynamic Widget Sections - Only show sections WITH widgets
-                    val sectionsWithWidgets = uiState.homeData?.services?.filter { (_, serviceData) ->
-                        serviceData.widgets.isNotEmpty()
+                    // 🔥 UPDATED: Check if services have components with widgets
+                    val servicesWithContent = uiState.homeData?.services?.filter { (_, serviceData) ->
+                        serviceData.components.any { component ->
+                            component.widgets.isNotEmpty() &&
+                            component.widgets.any { it.widget_id != "fallback_error_card" }
+                        }
                     }
 
-                    val sectionsWithoutWidgets = uiState.homeData?.services?.filter { (_, serviceData) ->
-                        serviceData.widgets.isEmpty()
+                    val servicesWithoutContent = uiState.homeData?.services?.filter { (_, serviceData) ->
+                        serviceData.components.isEmpty() ||
+                        serviceData.components.all { component ->
+                            component.widgets.isEmpty() ||
+                            component.widgets.all { it.widget_id == "fallback_error_card" }
+                        }
                     }
 
-                    // Show sections that have widgets
-                    sectionsWithWidgets?.forEach { (serviceKey, serviceData) ->
+                    // 🔥 UPDATED: Pass ServiceData to WidgetSection
+                    servicesWithContent?.forEach { (serviceKey, serviceData) ->
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
                             WidgetSection(
-                                title = serviceData.title,
-                                widgets = serviceData.widgets,
+                                serviceData = serviceData,  // ← Pass entire ServiceData
                                 isCollapsed = uiState.collapsedSections.contains(serviceKey),
                                 onToggleCollapse = { onToggleSection(serviceKey) },
                                 onAddToCart = { widget -> onAddToCart(serviceKey, widget) },
@@ -80,11 +86,11 @@ fun HomeScreen(
                     }
 
                     // Show single "No Deals Available" message if any sections are empty
-                    if (!sectionsWithoutWidgets.isNullOrEmpty()) {
+                    if (!servicesWithoutContent.isNullOrEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
                             NoDealsAvailableSection(
-                                emptyServices = sectionsWithoutWidgets.values.map { it.title }
+                                emptyServices = servicesWithoutContent.values.map { it.title }
                             )
                         }
                     }
@@ -288,7 +294,7 @@ private fun ErrorScreen(error: String, onRetry: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "âš ï¸ Connection Error",
+                    text = "⚠️ Connection Error",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Check24Colors.TextDark

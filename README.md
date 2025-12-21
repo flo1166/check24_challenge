@@ -14,11 +14,6 @@ This repository contains a complete implementation of the **CHECK24 Home Widgets
 
 ---
 
-## Youtube Video:
-https://www.youtube.com/watch?v=6sEaXynZd3o
-
----
-
 ## 📚 Documentation
 
 ### For Core Engineering Teams
@@ -45,10 +40,6 @@ https://www.youtube.com/watch?v=6sEaXynZd3o
 
 ---
 
-## 🚀 Live Deployment
-
-**Production URL:** https://check24-widgets.your-domain.com
-
 **Demo Credentials:**
 - User ID: 123 (hardcoded for demo purposes)
 
@@ -73,9 +64,22 @@ curl -X POST https://check24-widgets.your-domain.com:8001/widget/car-insurance/c
 
 ## 🎥 Application Video
 
-**Video URL:** [https://youtube.com/watch?v=YOUR_VIDEO_ID](https://youtube.com/watch?v=YOUR_VIDEO_ID)
+**Video URL:** [https://youtu.be/6sEaXynZd3o](https://youtu.be/6sEaXynZd3o)
 
-**Duration:** 4 minutes 45 seconds
+## Live Deployed
+**Demo URL:** [https://check24-challenge-gamma.vercel.app/](https://check24-challenge-gamma.vercel.app/)
+
+# Backend (only one postgressql database (free tier))
+**Car Insurance Service:** [https://check24-challenge-car-insurance-service2.onrender.com](https://check24-challenge-car-insurance-service2.onrender.com)
+**Health Insurance Service:** [https://check24-challenge-health-insurance-jvta.onrender.com](https://check24-challenge-health-insurance-jvta.onrender.com)
+**House Insurance Service:** [https://check24-challenge-house-insurance.onrender.com/](https://check24-challenge-house-insurance.onrender.com/)
+**Banking Service:** [https://check24-challenge-banking-service2.onrender.com](https://check24-challenge-banking-service2.onrender.com)
+
+Can be tested by:
+https://check24-challenge-car-insurance-service2.onrender.com/widget/car-insurance
+https://check24-challenge-banking-service2.onrender.com/widget/banking 
+
+**Duration:** 4 minutes 55 seconds
 
 **Content Covered:**
 1. System architecture overview (30s)

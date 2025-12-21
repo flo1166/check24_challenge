@@ -9,7 +9,8 @@
 
 import httpx
 from pybreaker import CircuitBreaker, CircuitBreakerError
-from typing import Dict, Any
+from typing import Dict, Any, List
+from collections import defaultdict
 import os
 import logging
 import time
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 FALLBACK_WIDGET_PAYLOAD: Dict[str, Any] = {
     "widget_id": "fallback_error_card",
     "component_type": "Card",
+    "component_id": "fallback_component",
+    "component_order": 999,
     "data": {
         "header": "Service Temporarily Unavailable",
         "body": "We apologize for the inconvenience. Please try again in a few moments."
@@ -230,6 +233,78 @@ banking_client = ProductServiceClient(
     breaker=banking_breaker
 )
 
+################################
+### Component Grouping Logic ###
+################################
+
+def group_widgets_by_component(widgets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Groups widgets by component_id and component_order.
+    
+    Returns a list of component groups, each containing:
+    - component_id: The component identifier
+    - component_order: Display order (lower = earlier)
+    - component_type: Type of component (from first widget)
+    - widgets: List of widgets in this component
+    
+    Example output:
+    [
+        {
+            "component_id": "carousel_featured",
+            "component_order": 1,
+            "component_type": "Carousel",
+            "widgets": [widget1, widget2, widget3]
+        },
+        {
+            "component_id": "product_grid_main",
+            "component_order": 2,
+            "component_type": "ProductGrid",
+            "widgets": [widget4, widget5, widget6]
+        }
+    ]
+    """
+    # Group widgets by component_id
+    component_groups = defaultdict(list)
+    component_metadata = {}  # Store component_order and component_type
+    
+    for widget in widgets:
+        component_id = widget.get('component_id', 'default_component')
+        component_order = widget.get('component_order', 0)
+        component_type = widget.get('component_type', 'Card')
+        
+        component_groups[component_id].append(widget)
+        
+        # Store metadata for this component (from first widget)
+        if component_id not in component_metadata:
+            component_metadata[component_id] = {
+                'component_order': component_order,
+                'component_type': component_type
+            }
+    
+    # Convert to list format with metadata
+    result = []
+    for component_id, widgets_list in component_groups.items():
+        metadata = component_metadata[component_id]
+        
+        # Sort widgets within component by priority
+        sorted_widgets = sorted(widgets_list, key=lambda w: w.get('priority', 0))
+        
+        result.append({
+            'component_id': component_id,
+            'component_order': metadata['component_order'],
+            'component_type': metadata['component_type'],
+            'widgets': sorted_widgets
+        })
+    
+    # Sort components by component_order
+    result.sort(key=lambda c: c['component_order'])
+    
+    logger.info(f"✅ Grouped {len(widgets)} widgets into {len(result)} components")
+    for component in result:
+        logger.info(f"   - {component['component_id']} (order={component['component_order']}): {len(component['widgets'])} widgets")
+    
+    return result
+
 ########################
 ### Public API calls ###
 ########################
@@ -237,7 +312,10 @@ banking_client = ProductServiceClient(
 async def fetch_all_widgets_swr() -> Dict[str, Any]:
     """
     Aggregates widgets from all product services.
-    Returns widgets grouped by service.
+    Returns widgets grouped by service AND by component.
+    
+    NEW: Each service's widgets are now grouped into components
+    based on component_id and component_order.
     """
     logger.info("Fetching widgets from all services...")
     
@@ -250,7 +328,7 @@ async def fetch_all_widgets_swr() -> Dict[str, Any]:
         return_exceptions=True
     )
     
-    # Group widgets by service
+    # Service configurations
     service_configs = [
         {"key": "car_insurance", "name": "CarInsurance", "title": "Car Insurance Deals"},
         {"key": "health_insurance", "name": "HealthInsurance", "title": "Health Insurance Deals"},
@@ -271,33 +349,37 @@ async def fetch_all_widgets_swr() -> Dict[str, Any]:
             logger.error(f"[{service_name}] Exception during fetch: {result}")
             grouped_widgets[service_key] = {
                 "title": service_title,
-                "widgets": []
+                "components": []
             }
             continue
         
         if isinstance(result, dict):
             if "widgets" in result:
                 widgets = result["widgets"]
+                
                 # Tag each widget with its service source
                 for widget in widgets:
                     widget["service"] = service_key
                 
-                logger.info(f"[{service_name}] Retrieved {len(widgets)} widgets")
+                components = group_widgets_by_component(widgets)
+                
+                logger.info(f"[{service_name}] Retrieved {len(widgets)} widgets grouped into {len(components)} components")
+                
                 grouped_widgets[service_key] = {
                     "title": service_title,
-                    "widgets": widgets
+                    "components": components
                 }
                 total_count += len(widgets)
             else:
                 logger.warning(f"[{service_name}] No 'widgets' key in response")
                 grouped_widgets[service_key] = {
                     "title": service_title,
-                    "widgets": []
+                    "components": []
                 }
         else:
             grouped_widgets[service_key] = {
                 "title": service_title,
-                "widgets": []
+                "components": []
             }
     
     logger.info(f"Total widgets aggregated: {total_count} across {len(grouped_widgets)} services")
