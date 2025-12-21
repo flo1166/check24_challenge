@@ -13,9 +13,17 @@ This repository contains a complete implementation of the **CHECK24 Home Widgets
 - ✅ Multi-platform support (Web/React, Android/Kotlin)
 - ✅ Zero client deploys for content/layout changes
 
+**Preview WebApp and Android App:**
+<p float="left">
+  <img src="Pictures/WebApp1.png" width="20%" />
+  <img src="Pictures/WebApp2.png" width="20%" /> 
+  <img src="Pictures/WebApp3.png" width="20%" />
+  <img src="Pictures/AndroidApp.png" width=30%" />
+</p>
+
 ---
 
-## 📚 Documentation
+## 📚 Deliverables
 
 ### For Core Engineering Teams
 👉 **[CONCEPT.md](./CONCEPT.md)** - Complete technical specification for implementing the platform
@@ -46,7 +54,7 @@ This repository contains a complete implementation of the **CHECK24 Home Widgets
 ### Live Deployed
 **Demo URL:** [https://check24-challenge-gamma.vercel.app/](https://check24-challenge-gamma.vercel.app/)
 
-## Backend (only one postgressql database (free tier))
+#### Backend (only one postgressql database (free tier))
 * **Car Insurance Service:** [https://check24-challenge-car-insurance-service2.onrender.com](https://check24-challenge-car-insurance-service2.onrender.com)
 * **Health Insurance Service:** [https://check24-challenge-health-insurance-jvta.onrender.com](https://check24-challenge-health-insurance-jvta.onrender.com)
 * **House Insurance Service:** [https://check24-challenge-house-insurance.onrender.com/](https://check24-challenge-house-insurance.onrender.com/)
