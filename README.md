@@ -9,6 +9,7 @@ This repository contains a complete implementation of the **CHECK24 Home Widgets
 - ✅ SWR caching
 - ✅ availability through circuit breakers
 - ✅ Real-time cache invalidation via Kafka + SSE
+- ✅ Personalization via user, dynamic layout by components (with ordering) and mixed widget grouping in components
 - ✅ Multi-platform support (Web/React, Android/Kotlin)
 - ✅ Zero client deploys for content/layout changes
 
@@ -38,56 +39,22 @@ This repository contains a complete implementation of the **CHECK24 Home Widgets
 - Personalization strategies
 - Testing & troubleshooting
 
----
-
-**Demo Credentials:**
-- User ID: 123 (hardcoded for demo purposes)
-
-**Key Endpoints:**
-- Home Page: `GET /home`
-- User Contracts: `GET /user/123/contracts`
-- SSE Updates: `GET /stream/updates`
-- Health Check: `GET /health`
-
-**Try It:**
-```bash
-# Fetch home widgets
-curl https://check24-widgets.your-domain.com/home
-
-# Create car insurance contract
-curl -X POST https://check24-widgets.your-domain.com:8001/widget/car-insurance/contract \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": 123, "widget_id": "car_offer_devk"}'
-```
-
----
-
-## 🎥 Application Video
+### 🎥 Application Video
 
 **Video URL:** [https://youtu.be/6sEaXynZd3o](https://youtu.be/6sEaXynZd3o)
 
-## Live Deployed
+### Live Deployed
 **Demo URL:** [https://check24-challenge-gamma.vercel.app/](https://check24-challenge-gamma.vercel.app/)
 
-# Backend (only one postgressql database (free tier))
-**Car Insurance Service:** [https://check24-challenge-car-insurance-service2.onrender.com](https://check24-challenge-car-insurance-service2.onrender.com)
-**Health Insurance Service:** [https://check24-challenge-health-insurance-jvta.onrender.com](https://check24-challenge-health-insurance-jvta.onrender.com)
-**House Insurance Service:** [https://check24-challenge-house-insurance.onrender.com/](https://check24-challenge-house-insurance.onrender.com/)
-**Banking Service:** [https://check24-challenge-banking-service2.onrender.com](https://check24-challenge-banking-service2.onrender.com)
+## Backend (only one postgressql database (free tier))
+* **Car Insurance Service:** [https://check24-challenge-car-insurance-service2.onrender.com](https://check24-challenge-car-insurance-service2.onrender.com)
+* **Health Insurance Service:** [https://check24-challenge-health-insurance-jvta.onrender.com](https://check24-challenge-health-insurance-jvta.onrender.com)
+* **House Insurance Service:** [https://check24-challenge-house-insurance.onrender.com/](https://check24-challenge-house-insurance.onrender.com/)
+* **Banking Service:** [https://check24-challenge-banking-service2.onrender.com](https://check24-challenge-banking-service2.onrender.com)
 
 Can be tested by:
 https://check24-challenge-car-insurance-service2.onrender.com/widget/car-insurance
 https://check24-challenge-banking-service2.onrender.com/widget/banking 
-
-**Duration:** 4 minutes 55 seconds
-
-**Content Covered:**
-1. System architecture overview (30s)
-2. JSON contract & multi-platform rendering (45s)
-3. SWR caching strategy demonstration (60s)
-4. Circuit breaker & resilience demo (45s)
-5. Real-time cache invalidation via Kafka (60s)
-6. Performance metrics & scalability (45s)
 
 ---
 
@@ -209,7 +176,7 @@ https://check24-challenge-banking-service2.onrender.com/widget/banking
 ### Prerequisites
 
 - Docker 20.10+ & Docker Compose 2.0+
-- Python 3.11+ (for local development)
+- Python 3.12+ (for local development)
 - Node.js 18+ (for web client)
 - Android Studio (for Android app)
 
@@ -217,8 +184,7 @@ https://check24-challenge-banking-service2.onrender.com/widget/banking
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/check24-widget-platform.git
-cd check24-widget-platform
+git clone
 
 # Start infrastructure + services
 docker-compose up -d
@@ -284,16 +250,6 @@ curl http://localhost:8000/home | jq '.services.car_insurance.widgets | length'
 
 ---
 
-## 🧪 Testing
-
-### Unit Tests (Python)
-
-```bash
-cd core-service
-pytest tests/ -v --cov=app
-```
----
-
 ## 📊 Monitoring
 
 ### Health Checks
@@ -308,31 +264,6 @@ curl http://localhost:8002/health  # Health Insurance
 curl http://localhost:8003/health  # House Insurance
 curl http://localhost:8004/health  # Banking
 ```
-
-### Metrics Endpoints
-
-```bash
-# Circuit Breaker Status
-curl http://localhost:8000/debug/circuit-breaker-status
-
-# Cache Stats
-docker exec redis redis-cli INFO stats
-```
-
-### Logs
-
-```bash
-# Core Service logs
-docker logs -f core-service
-
-# Product Service logs
-docker logs -f car-insurance-service
-
-# Kafka logs
-docker logs -f kafka
-```
-
----
 
 ## 🔧 Configuration
 
@@ -422,48 +353,9 @@ curl http://localhost:8001/widget/car-insurance
 
 ---
 
-## 📝 Development Workflow
-
-### Adding a New Widget Component
-
-1. **Define JSON schema** in `DEVELOPER_GUIDELINE.md`
-2. **Implement renderer** in `web-client/src/components/widgets/`
-3. **Implement renderer** in `android-client/ui/components/`
-4. **Update Pydantic models** in `core-service/app/core/models.py`
-5. **Test on all platforms**
-
-### Deploying a Product Service Update
-
-1. **Make code changes** in your product service
-2. **Update database** if schema changed
-3. **Build Docker image**: `docker build -t my-service:v1.1.0 .`
-4. **Push to registry**: `docker push registry.check24.de/my-service:v1.1.0`
-5. **Rolling update**: `kubectl set image deployment/my-service ...`
-6. **Verify health**: `curl https://my-service.check24.de/health`
-
----
-
-## 🤝 Contributing
-
-### For Core Engineers
-
-1. Read [CONCEPT.md](./CONCEPT.md)
-2. Follow coding standards (Black, isort, mypy)
-3. Write tests (pytest, coverage >80%)
-4. Submit PR with clear description
-
-### For Product Teams
-
-1. Read [DEVELOPER_GUIDELINE.md](./DEVELOPER_GUIDELINE.md)
-2. Implement required API endpoints
-3. Test integration locally
-4. Contact Core team for review
-
----
-
 ## 🙏 Acknowledgments
 
-This project was created as part of the **CHECK24 GenDev IT Scholarship** application (Challenge Submission December 2025).
+This project was created as part of the **CHECK24 GenDev IT Scholarship** application (Submission December 2025).
 
 **Key Technologies:**
 - FastAPI (Python web framework)
@@ -474,14 +366,8 @@ This project was created as part of the **CHECK24 GenDev IT Scholarship** applic
 - Kotlin + Jetpack Compose (Android app)
 - Docker (Containerization)
 
-**Inspiration:**
-- Netflix's Server-Driven UI architecture
-- Vercel's SWR caching pattern
-- Martin Fowler's Circuit Breaker pattern
-- CHECK24's decentralized speedboat model
-
 ---
 
-*Last Updated: December 19, 2025*  
-*Version: 1.0.0*  
-*Status: Production-Ready PoC*
+*Last Updated: December 21, 2025*  
+*Version: 1.1.0*  
+*Status: PoC*
