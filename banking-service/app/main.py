@@ -28,7 +28,7 @@ from aiokafka.errors import KafkaError
 import json
 import httpx
 
-from app.core.models import Widget, Contracts, ContractRequest
+from app.core.models import Component, Widget, Contracts, ContractRequest
 
 logger = logging.getLogger(__name__)
 
@@ -273,6 +273,48 @@ def health_check():
     return {"status": "ok"}
 
 @app.get("/widget/banking")
+def get_banking_insurance_widget(db: Session = Depends(get_db)):
+    logger.info('API call: /widget/car-insurance starts')
+    user_id = 123
+    
+    try:
+        # 1. Check for contracts
+        stmt_contracts = select(func.count(Contracts.id)).filter(Contracts.user_id == user_id)
+        if db.scalar(stmt_contracts) > 0:
+            return {"widgets": []}
+
+        # 2. Corrected Query: Fetch both Component and Widget
+        stmt = (
+            select(Component, Widget)
+            .join(Widget, 
+                  (Component.component_id == Widget.component_id) & 
+                  (Component.user_id == Widget.user_id))
+            .filter(Component.user_id == user_id)
+            .order_by(Component.component_order.asc(), Widget.priority.desc())
+        )
+
+        # Use .execute() to get both objects back
+        results = db.execute(stmt).all()
+
+        # 3. Corrected Mapping Logic
+        widgets_list = []
+        for component, widget in results:
+            # Now 'widget' is the actual Widget object which has the method
+            w_data = widget.to_sdui_format()
+            
+            # Inject metadata from the joined component
+            w_data["component_order"] = component.component_order
+            w_data["component_type_from_component"] = component.component_type
+            
+            widgets_list.append(w_data)
+
+        logger.info(f'Successfully returned {len(widgets_list)} merged widgets')
+        return {"widgets": widgets_list}
+
+    except Exception as e:
+        logger.error(f"Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    
 def get_banking_widget(db: Session = Depends(get_db)):
     """
     Fetches banking widgets from the database.

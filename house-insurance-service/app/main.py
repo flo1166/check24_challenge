@@ -32,7 +32,7 @@ from aiokafka.errors import KafkaError
 import json
 import httpx
 
-from app.core.models import Widget, Contracts, ContractRequest
+from app.core.models import Component, Widget, Contracts, ContractRequest
 
 logger = logging.getLogger(__name__)
 
@@ -285,49 +285,46 @@ def health_check():
 
 @app.get("/widget/house-insurance")
 def get_house_insurance_widget(db: Session = Depends(get_db)):
-    """
-    Fetches house insurance widgets from the database.
-    If user has ANY contract: Returns EMPTY list (no Card widgets)
-    If user has NO contract: Returns 6 random Card widgets
-    """
-    logger.info('API call: /widget/house-insurance starts')
+    logger.info('API call: /widget/car-insurance starts')
+    user_id = 123
     
     try:
-        # user_id is hardcoded for demo purposes
-        user_id = 123
-        
-        # Check if user has ANY contracts
+        # 1. Check for contracts
         stmt_contracts = select(func.count(Contracts.id)).filter(Contracts.user_id == user_id)
-        contract_count = db.scalar(stmt_contracts)
-        has_any_contract = contract_count > 0
-        
-        logger.info(f'User {user_id} has {contract_count} house insurance contract(s)')
-        
-        # If user has contract, return empty list
-        if has_any_contract:
-            logger.info('User has contract - returning NO widgets (empty list)')
+        if db.scalar(stmt_contracts) > 0:
             return {"widgets": []}
-        
-        # Return widgets
-        logger.info('User has no contract - returning widgets')
+
+        # 2. Corrected Query: Fetch both Component and Widget
         stmt = (
-            select(Widget)
-            .filter(Widget.user_id == user_id)
-            .order_by(Widget.priority)
+            select(Component, Widget)
+            .join(Widget, 
+                  (Component.component_id == Widget.component_id) & 
+                  (Component.user_id == Widget.user_id))
+            .filter(Component.user_id == user_id)
+            .order_by(Component.component_order.asc(), Widget.priority.desc())
         )
-        
-        widgets_orm = db.scalars(stmt).all()
-        widgets_list = [widget.to_sdui_format() for widget in widgets_orm]
-        
-        logger.info(f'API call: /widget/house-insurance returned {len(widgets_list)} widgets')
+
+        # Use .execute() to get both objects back
+        results = db.execute(stmt).all()
+
+        # 3. Corrected Mapping Logic
+        widgets_list = []
+        for component, widget in results:
+            # Now 'widget' is the actual Widget object which has the method
+            w_data = widget.to_sdui_format()
+            
+            # Inject metadata from the joined component
+            w_data["component_order"] = component.component_order
+            w_data["component_type_from_component"] = component.component_type
+            
+            widgets_list.append(w_data)
+
+        logger.info(f'Successfully returned {len(widgets_list)} merged widgets')
         return {"widgets": widgets_list}
 
-    except OperationalError as e:
-        logger.error(f"Database query error: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Could not retrieve data from house insurance database."
-        )
+    except Exception as e:
+        logger.error(f"Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/widget/house-insurance/contract")
 async def post_house_insurance_contract(contract_data: ContractRequest, db: Session = Depends(get_db)):

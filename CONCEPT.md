@@ -2,22 +2,21 @@
 
 ## Executive Summary
 
-This document provides the technical specification for the CHECK24 Home Widgets platform - a distributed, high-performance system enabling decentralized product teams to deliver personalized content to the CHECK24 Home experience across Web, iOS, and Android platforms.
+This document provides the technical specification for the CHECK24 Home Widgets platform - a distributed, high-performance system enabling decentralized product teams to deliver personalized content to the CHECK24 Home experience across Web, and Android platforms.
 
 **Key Achievements:**
 - **Performance**: SWR caching strategy
 - **Availability**: through circuit breakers and graceful degradation
 - **Scalability**: Horizontal scaling of all components without single points of failure
 - **Flexibility**: JSON-based contract enables multi-platform rendering without code changes
+- **Personalisation**: via user, grouping of widgets by components and ordering
 - **Developer Experience**: Clear integration path with minimal coupling to Core systems
-
-**Target Audience**: Core engineering teams responsible for implementing and operating the centralized Home Widget infrastructure.
 
 ---
 
 ## Table of Contents
 
-1. [System Architecture](#system-architecture)
+1. [Conceptual System Architecture](#conceptual-system-architecture)
 2. [Core Design Principles](#core-design-principles)
 3. [Component Specifications](#component-specifications)
 4. [API Contracts](#api-contracts)
@@ -32,73 +31,36 @@ This document provides the technical specification for the CHECK24 Home Widgets 
 
 ---
 
-## System Architecture
+## Conceptual System Architecture
 
 ### Overview
 
 The Home Widgets platform follows a **Backend-for-Frontend (BFF) pattern** with a central Core Service acting as an intelligent aggregator and cache layer between client applications and decentralized product services.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Client Layer                           │
-│  ┌──────────────┐                     ┌──────────────┐      │
-│  │  Web Client  │                     │ Android App  │      │
-│  │  (React)     │                     │  (Kotlin)    │      │
-│  └──────┬───────┘                     └──────┬───────┘      │
-└─────────┼────────────────────────────────────┼──────────────┘
-          │                                    │
-          └──────────────────┬─────────────────┘
-                             │ HTTPS/JSON
-                             ▼
-          ┌──────────────────────────────────────┐
-          │      Core Service (BFF)              │
-          │  ┌────────────┐  ┌────────────────┐ │
-          │  │  FastAPI   │  │  Redis Cache   │ │
-          │  │  REST API  │  │  (SWR Pattern) │ │
-          │  └─────┬──────┘  └────────────────┘ │
-          │        │                             │
-          │  ┌─────▼──────────────────────────┐ │
-          │  │  Kafka Consumer                │ │
-          │  │  (Cache Invalidation)          │ │
-          │  └────────────────────────────────┘ │
-          └──────────────┬───────────────────────┘
-                         │ Circuit Breaker Protected
-                         ▼
-          ┌──────────────────────────────────────┐
-          │    Product Services Layer            │
-          │  ┌────────────┐  ┌────────────────┐ │
-          │  │    Car     │  │    Health      │ │
-          │  │ Insurance  │  │   Insurance    │ │
-          │  └────────────┘  └────────────────┘ │
-          │  ┌────────────┐  ┌────────────────┐ │
-          │  │   House    │  │    Banking     │ │
-          │  │ Insurance  │  │   Products     │ │
-          │  └────────────┘  └────────────────┘ │
-          │                                      │
-          │  Each with: PostgreSQL + Kafka       │
-          └──────────────────────────────────────┘
-```
+<p float="left">
+  <img src="Pictures/Architecture.png" width="100%" />
+</p>
 
 ### Architectural Layers
 
-#### 1. Client Layer (Multi-Platform)
+#### Client Layer (Multi-Platform)
 - **Web Client**: React + Vite, responsive design
-- **iOS App**: Swift + Jetpack Compose, native UI
 - **Android App**: Kotlin + Jetpack Compose, native UI
 - **Shared Contract**: All platforms consume identical JSON responses
 
-#### 2. Core Service (BFF)
-- **Technology**: FastAPI (Python 3.11+)
+#### Service Layer
+##### Core Service (BFF)
+- **Technology**: FastAPI (Python 3.12+)
 - **Responsibilities**:
-  - Widget aggregation from product services
+  - Widget aggregation from product services by components
   - Redis caching with SWR pattern
   - Circuit breaker protection
   - SSE-based real-time updates
   - User contract management
 - **Horizontal Scaling**: Stateless design, can run N replicas
 
-#### 3. Product Services Layer
-- **Technology**: FastAPI (Python 3.11+)
+##### Product Service
+- **Technology**: FastAPI (Python 3.12+)
 - **Responsibilities**:
   - Widget content generation
   - User-specific personalization
@@ -106,12 +68,13 @@ The Home Widgets platform follows a **Backend-for-Frontend (BFF) pattern** with 
   - Event publishing via Kafka
 - **Independence**: Each service owns its database and logic
 
-#### 4. Infrastructure Layer
-- **Redis**: Distributed cache (can use Redis Cluster for HA)
+#### Cache + Event Layer
+- **Redis**: Distributed cache (SWR logic)
 - **Kafka + Zookeeper**: Event streaming for cache invalidation
-- **PostgreSQL**: Per-service data persistence
 - **Docker Compose**: Local development & testing environment
 
+#### Data Layer
+- **PostgreSQL**: a database with widgets, contracts and components
 ---
 
 ## Core Design Principles
