@@ -49,7 +49,7 @@ This repository contains a complete implementation of the **CHECK24 Home Widgets
 
 ### 🎥 Application Video
 
-**Video URL:** [https://youtu.be/6sEaXynZd3o](https://youtu.be/6sEaXynZd3o)
+**Video URL:** [https://youtu.be/afz6HEtqgXk](https://youtu.be/afz6HEtqgXk)
 
 ### Live Deployed
 **Demo URL:** [https://check24-challenge-gamma.vercel.app/](https://check24-challenge-gamma.vercel.app/)
