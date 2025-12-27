@@ -24,10 +24,7 @@ This document provides the technical specification for the CHECK24 Home Widgets 
 6. [Performance & Caching Strategy](#performance--caching-strategy)
 7. [High Availability & Resilience](#high-availability--resilience)
 8. [Deployment Architecture](#deployment-architecture)
-9. [Security Considerations](#security-considerations)
-10. [Monitoring & Observability](#monitoring--observability)
-11. [Scalability Roadmap](#scalability-roadmap)
-12. [Decision Rationale](#decision-rationale)
+9. [Decision Rationale](#decision-rationale)
 
 ---
 
@@ -35,10 +32,17 @@ This document provides the technical specification for the CHECK24 Home Widgets 
 
 ### Overview
 
-The Home Widgets platform follows a **Backend-for-Frontend (BFF) pattern** with a central Core Service acting as an intelligent aggregator and cache layer between client applications and decentralized product services.
+The Home Widgets platform follows a **Backend-for-Frontend (BFF) pattern** with a central Core Service acting as an intelligent aggregator and cache layer between client applications and decentralized product services. It mimics the CHECK24 company structure were the comparison products (product services) are individual legal entities (speedboats), which provide their own infrastructure (FastAPI server) and logic. The aggregator is the central homepage where an aggregated view is provided.
 
 <p float="left">
   <img src="Pictures/Architecture.png" width="100%" />
+</p>
+
+### Widgets Design
+The widgets are designed in a flexible way. Components aggregate widgets to a piece of the layout. Components control the order at the layout (see black circles) and the type of aggregation (e.g. widgets shown in a caroussel, etc.). The widgets control how they should be rendered (as card, etc.) and the order of the widgets. This allows for personalization and flexibility (see mixed types of widgets in one component).
+
+<p float="left">
+  <img src="Pictures/WidgetRendering.png" width="100%" />
 </p>
 
 ### Architectural Layers
@@ -74,7 +78,18 @@ The Home Widgets platform follows a **Backend-for-Frontend (BFF) pattern** with 
 - **Docker Compose**: Local development & testing environment
 
 #### Data Layer
-- **PostgreSQL**: a database with widgets, contracts and components
+- **PostgreSQL**: a database with widgets, contracts, users and components
+- **DB Schema**: can be ignored in a real deployment, as every service has to deliver the same JSON contract and organizes itself, how the database is shaped and the API is aggregating this data (this is a suggestion)
+
+#### Kubernetes
+- **Kubernetes (K8s)**: Production-grade container orchestration replacing Docker Compose
+- **Responsibilities**:
+  - Cluster management and deployment
+  - Service Discovery & Load Balancing
+  - Auto-scale services 
+  - Health checks
+  - Monitoring 
+
 ---
 
 ## Core Design Principles
@@ -86,30 +101,26 @@ The Home Widgets platform follows a **Backend-for-Frontend (BFF) pattern** with 
 **JSON Contract Structure**:
 ```json
 {
-  "widget_id": "car_insurance_offer_123",
+  
+  "component_id":"component_1",
+  "component_order": 1,
+  "component_type_from_component":"Card",
   "component_type": "Card",
+  "widget_id": "car_insurance_offer_123",
   "priority": 1,
   "data": {
-    "title": "Kfz-Versicherung vergleichen",
-    "subtitle": "Top-Angebote für Sie",
-    "content": "Ab 89€/Monat. Vollkasko. Jetzt sparen.",
-    "image_url": "assets/images/cars/vw-golf-7-used.png",
-    "pricing": {
-      "price": 89.00,
-      "currency": "€",
-      "frequency": "Monat"
-    },
-    "rating": {
-      "score": 4.8
-    }
+    "test": "test",
   }
 }
-```
 
-**Key Benefits**:
+```
+The idea is that a component has a id. This id helps to aggregate widgets into one component at the client. The component_type_from_component helps to understand the client how they should be shown (Caroussel, Grid, ...) and the component_order dictates in which order the components should be shown. The widget_id is a label for the widget. The component type decides how the widget should be displayed (Card, Box, Grid, ...) and the data is specific data for the component_type to display. The priority shows which widgets should be shown first.
+
+**Benefits**:
 - **Zero Client Deploys**: Layout changes deploy via API updates only
-- **A/B Testing**: Products can test variants by changing JSON structure
-- **Platform Consistency**: Same data = same UX across Web/iOS/Android
+- **A/B Testing**: Products can test variants by changing the order of the component, the aggregtion of the widgets, etc.
+  **Personalization**: Each user can see different components / widgets, in varing order (dynamic layout)
+- **Platform Consistency**: Same data = same UX across Web/Android
 - **Type Safety**: Clients validate against well-defined schemas
 
 ### 2. Stale-While-Revalidate (SWR) Caching
@@ -132,9 +143,10 @@ Request Flow:
 - **SWR Grace Period**: 5 minutes
 - **Cache Key Pattern**: `sdui:home_page:v1`
 
-**Metrics**:
-- **Cache Hit Rate**: 85-95% (measured)
-- **P95 Latency**: <50ms (cache hit), <300ms (cache miss)
+**Benefits**:
+- **Response Time**: no waiting for backend services, once cache was refreshed / loaded
+- **Uptime**: systems stays online, even during backend shortages
+- **Reduced Backend Load**: fewer requests, due to immediate loading of the cache
 
 ### 3. Circuit Breaker Protection
 
@@ -164,12 +176,16 @@ RESET_TIMEOUT = 10     # Try again after 10 seconds
   }
 }
 ```
+**Benefits**:
+- **Cascading Failures**: Platform remains unblocked if service is not healthy
+- **Fast-Fail**: Failing results in immediate action (after five retries)
+- **Ressources**: Failing services don't get bombarded with requests
 
-### 4. Event-Driven Cache Invalidation
+### 4. Event-Driven Cache Invalidation as a Dual Approach
 
-**Problem**: Cached data becomes stale after user actions (e.g., contract purchase).
+**Problem**: Cached data becomes stale after user actions (e.g., contract purchase) or backend updates.
 
-**Solution**: Kafka-based event streaming for real-time invalidation.
+**Solution**: Kafka-based event streaming combined with time-based SWR for comprehensive cache freshness.
 
 **Flow**:
 1. User purchases car insurance → Product service writes to database
@@ -196,6 +212,11 @@ RESET_TIMEOUT = 10     # Try again after 10 seconds
 }
 ```
 
+**Benefits**:
+- **Relevance**: only show relevent widgets
+- **Updates**: instant for user actions (invalidation of the cache)
+- **Backend Changes**: are triggered via SWR
+
 ### 5. Decoupled Product Autonomy
 
 **Key Principle**: Products control their widget content and personalization logic.
@@ -219,7 +240,7 @@ RESET_TIMEOUT = 10     # Try again after 10 seconds
 
 **Technology Stack**:
 - **Framework**: FastAPI 0.104+
-- **Language**: Python 3.11+
+- **Language**: Python 3.12+
 - **ASGI Server**: Uvicorn with async workers
 - **HTTP Client**: HTTPX (async)
 
@@ -241,12 +262,17 @@ async def get_home_page_widgets(background_tasks: BackgroundTasks):
   "services": {
     "car_insurance": {
       "title": "Car Insurance Deals",
-      "widgets": [...]
+      "components": 
+        [0]: {
+          "component_id": 1,
+          "component_order:" 0,
+          "widgets": [...]
+        }
     },
     "health_insurance": {
-      "title": "Health Insurance Deals",
-      "widgets": [...]
-    }
+      [...]
+    },
+    [...]
   },
   "timestamp": "2025-12-19T12:00:00Z",
   "cache_key": "sdui:home_page:v1"
@@ -316,22 +342,36 @@ MAX_POLL_RECORDS = 500
 
 #### Database Schema
 ```sql
--- Widgets table: stores widget definitions
-CREATE TABLE widgets (
-    user_id INTEGER,
-    widget_id VARCHAR(100) PRIMARY KEY,
-    component_type VARCHAR(50),
-    priority INTEGER DEFAULT 0,
-    data JSONB NOT NULL,
-    UNIQUE(user_id, widget_id)
+-- TABLE 1: components
+CREATE TABLE "public"."components" (
+    "component_id" VARCHAR(100) NOT NULL,
+    "user_id" INTEGER NOT NULL,
+    "component_type" VARCHAR(50) NOT NULL,
+    "component_order" INTEGER DEFAULT 0,
+    CONSTRAINT "components_pkey" PRIMARY KEY ("component_id", "user_id")
 );
 
--- Contracts table: tracks user purchases
-CREATE TABLE contracts (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER,
-    widget_id VARCHAR(100),
-    FOREIGN KEY (widget_id) REFERENCES widgets(widget_id)
+-- TABLE 2: widgets  
+CREATE TABLE "public"."widgets" (
+    "user_id" INTEGER NOT NULL,
+    "widget_id" VARCHAR(100) NOT NULL,
+    "component_type" VARCHAR(50) NOT NULL,
+    "priority" INTEGER DEFAULT 0,
+    "data" JSONB NOT NULL,
+    "component_id" VARCHAR(100) DEFAULT 'default_component',
+    CONSTRAINT "widgets_pkey" PRIMARY KEY ("widget_id"),
+    CONSTRAINT "widgets_unique_user_widget" UNIQUE ("user_id", "widget_id")
+);
+
+-- TABLE 3: contracts
+
+CREATE TABLE "public"."contracts" (
+    "id" INTEGER DEFAULT nextval('contracts_id_seq') NOT NULL,
+    "user_id" INTEGER NOT NULL,
+    "widget_id" VARCHAR(100) NOT NULL,
+    "type" VARCHAR(50),
+    CONSTRAINT "contracts_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "contracts_unique_user_widget" UNIQUE ("user_id", "widget_id")
 );
 ```
 
@@ -384,13 +424,7 @@ Response: Widget data for user's active contract
 ### Core Service → Client Applications
 
 #### GET `/home`
-**Purpose**: Fetch all widgets for Home page
-
-**Headers**:
-```
-Cache-Control: no-cache
-Pragma: no-cache
-```
+**Purpose**: Fetch all widgets for Home page grouped by service and component
 
 **Response Schema**:
 ```typescript
@@ -398,41 +432,83 @@ interface HomeResponse {
   services: {
     [serviceKey: string]: {
       title: string;
-      widgets: Widget[];
+      components: Component[];  // ← NEW: Components instead of flat widgets
     }
   };
   timestamp: string;
   cache_key: string;
+  stats: {
+    total_services: number;
+    total_components: number;
+    total_widgets: number;
+  };
 }
+
+interface Component {
+  component_id: string;           // e.g., "carousel_featured"
+  component_order: number;        // Display order (1 = first)
+  component_type: ComponentType;  // Type of UI component
+  widgets: Widget[];              // Widgets within this component
+}
+
+type ComponentType = 
+  | 'Carousel'        // Horizontal scrolling carousel
+  | 'ProductGrid'     // Grid layout
+  | 'Card'            // Single card
+  | 'InfoBox'         // Information display
+  | 'SectionHeader';  // Section title
 
 interface Widget {
   widget_id: string;
-  component_type: 'Card' | 'InfoBox' | 'ProductGrid' | 'SectionHeader';
-  priority: number;
+  component_type: ComponentType;  // Inherited from component
+  component_id: string;           // Parent component ID
+  component_order: number;        // Component's display order
+  priority: number;               // Widget order within component
+  service: string;                // e.g., "car_insurance"
   data: WidgetData;
-  service?: string;
 }
 
 interface WidgetData {
+  // Common fields
   title?: string;
   subtitle?: string;
   content?: string;
   image_url?: string;
+  
+  // Pricing information
   pricing?: {
     price: number;
     currency: string;
-    frequency?: string;
+    frequency?: 'monthly' | 'yearly' | 'one-time';
+    original_price?: number;      // For showing discounts
   };
+  
+  // Rating/Review
   rating?: {
-    score: number;
+    score: number;                // 0-5
+    count?: number;               // Number of reviews
   };
-  // Component-specific fields...
+  
+  // Provider/Company
+  provider?: {
+    name: string;
+    logo_url?: string;
+  };
+  
+  // Call-to-action
+  cta?: {
+    text: string;                 // e.g., "Get Quote"
+    url?: string;
+    action?: 'purchase' | 'compare' | 'details';
+  };
+  
+  // Component-specific fields
+  header?: string;                // For SectionHeader
+  body?: string;                  // For InfoBox, Card
+  features?: string[];            // For ProductGrid items
+  badge?: string;                 // e.g., "Best Value", "Popular"
 }
 ```
-
-**Status Codes**:
-- `200 OK`: Success
-- `503 Service Unavailable`: All product services down (rare)
 
 #### GET `/user/{user_id}/contracts`
 **Purpose**: Fetch user's active contracts across all services
@@ -482,6 +558,9 @@ eventSource.onmessage = (event) => {
     {
       "widget_id": "unique_id_123",
       "component_type": "Card",
+      "component_id":1,
+      "component_type_from_component": "Grid",
+      "component_order":0,
       "priority": 1,
       "data": { ... }
     }
@@ -538,12 +617,6 @@ eventSource.onmessage = (event) => {
                       │ Client         │
                       └────────────────┘
 ```
-
-**Timing Breakdown** (P95):
-- Redis cache hit: <50ms
-- Redis cache miss + fetch: <300ms
-- Single product service timeout: 5 seconds
-- Circuit breaker triggers: After 5 consecutive failures
 
 ### Secondary Flow: Contract Purchase
 
@@ -614,8 +687,6 @@ services:
 
 **Cache Key Strategy**:
 - **Pattern**: `sdui:home_page:v1`
-- **Versioning**: `v1` allows easy cache migration
-- **Per-user caching**: Not implemented yet (see [Scalability Roadmap](#scalability-roadmap))
 
 ### SWR Implementation Details
 
@@ -640,19 +711,6 @@ fresh_data = await fetch_from_services()
 await redis_client.setex(key, TTL, json.dumps(fresh_data))
 return fresh_data  # <300ms response
 ```
-
-### Performance Metrics
-
-**Measured Results** (local Docker environment):
-
-| Scenario | P50 | P95 | P99 |
-|----------|-----|-----|-----|
-| Cache Hit (Fresh) | 35ms | 48ms | 62ms |
-| Cache Hit (Stale) | 38ms | 51ms | 68ms |
-| Cache Miss | 180ms | 285ms | 420ms |
-| All Services Down | 45ms | 55ms | 70ms |
-
-**Cache Hit Rate**: 85-95% (estimated for production with 1-hour TTL)
 
 ### Circuit Breaker Metrics
 
@@ -730,30 +788,6 @@ def get_db():
 ```
 
 **User Impact**: 503 error for that specific service (others unaffected)
-
-### Redundancy Strategy
-
-**Horizontal Scaling**:
-```yaml
-# Example deployment configuration
-core_service:
-  replicas: 3
-  resources:
-    limits:
-      cpu: "1"
-      memory: "512Mi"
-```
-
-**Load Balancing**:
-- NGINX or cloud load balancer in front of Core Service replicas
-- Round-robin or least-connections algorithm
-- Health check endpoint: `/health`
-
-**Database Replication**:
-- PostgreSQL read replicas for product services
-- Widget data read from replicas (low latency)
-- Contract writes to primary (strong consistency)
-
 ---
 
 ## Deployment Architecture
@@ -766,30 +800,13 @@ core_service:
 3. `health-insurance-service:latest` - Product service
 4. `house-insurance-service:latest` - Product service
 5. `banking-service:latest` - Product service
-6. `web-client:latest` - React frontend (nginx)
+6. `zookeeper:latest` - Zookeeper
+7. `kafka:latest` - Kafka
+8. `web-client:latest` - React frontend
 
 **Orchestration**:
 ```yaml
 # docker-compose.yml (simplified)
-services:
-  core-service:
-    build: ./core-service
-    ports:
-      - "8000:8000"
-    environment:
-      REDIS_HOST: redis
-      KAFKA_BROKER: kafka:9093
-    depends_on:
-      - redis
-      - kafka
-
-  car-insurance-service:
-    build: ./car-insurance-service
-    ports:
-      - "8001:8000"
-    environment:
-      DB_HOST: product-db-car
-      KAFKA_BROKER: kafka:9093
 ```
 
 ### Infrastructure Components
@@ -797,40 +814,12 @@ services:
 **Required Services**:
 1. **Redis**: Caching layer
 2. **Kafka + Zookeeper**: Event streaming
-3. **PostgreSQL**: 5 instances (1 per service + core)
-4. **NGINX**: Reverse proxy & load balancer
+3. **PostgreSQL**: 4 instances (1 per service)
 
-**Network Architecture**:
-```
-Internet
-   │
-   ▼
-┌─────────────────┐
-│  Load Balancer  │ (NGINX/ALB)
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │  DMZ    │
-    └────┬────┘
-         │
-    ┌────┴─────────────────────────────┐
-    │  Private Network (VPC)           │
-    │  ┌──────────────┐                │
-    │  │ Core Service │ (3 replicas)   │
-    │  └──────┬───────┘                │
-    │         │                        │
-    │  ┌──────┴───────────────────┐   │
-    │  │  Product Services        │   │
-    │  │  (4 services, N replicas)│   │
-    │  └──────────────────────────┘   │
-    │                                  │
-    │  ┌──────────────┐               │
-    │  │ Data Layer   │               │
-    │  │ Redis, Kafka │               │
-    │  │ PostgreSQL   │               │
-    │  └──────────────┘               │
-    └──────────────────────────────────┘
-```
+**Architecture**:
+<p float="left">
+  <img src="Pictures/Deployment.png" width="100%" />
+</p>
 
 ### Deployment Process
 
@@ -854,353 +843,47 @@ docker-compose build --no-cache
 **4. Health Checks**:
 ```bash
 # Verify all services are healthy
-curl http://core-service:8000/health
-curl http://car-insurance:8001/health
+curl http://localhost:8000/health
+curl http://localhost:8001/health
 ```
 
 **5. Smoke Tests**:
 ```bash
 # Test widget retrieval
-curl http://core-service:8000/home
-
-# Test contract creation
-curl -X POST http://car-insurance:8001/widget/car-insurance/contract \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": 123, "widget_id": "test_widget"}'
+curl http://localhost:8000/home
 ```
-
-### Production Considerations
-
-**Cloud Provider Options**:
-- **AWS**: ECS/EKS + ElastiCache + MSK (Kafka) + RDS
-- **GCP**: GKE + Memorystore + Cloud Pub/Sub + Cloud SQL
-- **Azure**: AKS + Azure Cache + Event Hubs + Azure Database
-
-**Infrastructure as Code**:
-```hcl
-# Terraform example
-resource "aws_ecs_service" "core_service" {
-  name            = "check24-core-service"
-  cluster         = aws_ecs_cluster.main.id
-  task_definition = aws_ecs_task_definition.core.arn
-  desired_count   = 3
-  
-  load_balancer {
-    target_group_arn = aws_lb_target_group.core.arn
-    container_name   = "core-service"
-    container_port   = 8000
-  }
-}
-```
-
-**Cost Estimation** (AWS, per month):
-- ECS Fargate (Core Service, 3 replicas): ~$150
-- ECS Fargate (Product Services, 4×2 replicas): ~$400
-- ElastiCache Redis (cache.t3.medium): ~$50
-- RDS PostgreSQL (db.t3.medium × 5): ~$250
-- MSK Kafka (kafka.t3.small): ~$200
-- Load Balancer: ~$20
-- **Total**: ~$1,070/month (baseline)
-
-**Scaling Costs**:
-- 10x traffic → 10x Core Service replicas = +$1,350/month
-- Redis Cluster (HA) = +$150/month
-- Multi-AZ RDS = +$250/month
-
----
-
-## Security Considerations
-
-### Authentication & Authorization
-
-**Current State** (PoC):
-- User ID hardcoded (123) for demonstration
-- No authentication layer
-
-**Production Requirements**:
-1. **JWT Token Authentication**:
-   ```
-   Authorization: Bearer <JWT_TOKEN>
-   ```
-2. **Token Validation**:
-   - Core Service validates JWT signature
-   - Extracts user ID from token claims
-   - Passes user ID to product services
-3. **Rate Limiting**:
-   - Per-user: 100 requests/minute
-   - Per-IP: 1000 requests/minute
-
-### Data Protection
-
-**In Transit**:
-- HTTPS/TLS 1.3 for all client communication
-- mTLS between Core Service and Product Services (optional)
-
-**At Rest**:
-- PostgreSQL encryption at rest
-- Redis AUTH password protection
-- Encrypted backups
-
-**PII Handling**:
-- Widget data should NOT contain PII (email, phone, address)
-- Use anonymized identifiers (user_id, widget_id)
-- GDPR-compliant data retention policies
-
-### Network Security
-
-**Firewall Rules**:
-```
-Core Service:
-  - Inbound: 443 (HTTPS from internet)
-  - Outbound: 8001-8004 (product services), 6379 (Redis), 9092 (Kafka)
-
-Product Services:
-  - Inbound: 8000 (from Core Service only)
-  - Outbound: 5432 (PostgreSQL), 9092 (Kafka)
-
-Data Layer:
-  - Inbound: 6379, 9092, 5432 (from services only)
-  - No public internet access
-```
-
-**DDoS Protection**:
-- CloudFlare or AWS Shield
-- Rate limiting at load balancer level
-- Automatic scaling based on traffic patterns
-
----
-
-## Monitoring & Observability
-
-### Key Metrics
-
-**Core Service**:
-- Request rate (requests/second)
-- Response time (P50, P95, P99)
-- Cache hit rate (%)
-- Circuit breaker state (per service)
-- Error rate (%)
-
-**Product Services**:
-- Database query time (ms)
-- Kafka publish latency (ms)
-- Widget generation time (ms)
-
-**Infrastructure**:
-- Redis memory usage (%)
-- Redis eviction rate (keys/second)
-- Kafka consumer lag (messages)
-- PostgreSQL connection pool usage
-
-### Logging Strategy
-
-**Structured Logging** (JSON format):
-```json
-{
-  "timestamp": "2025-12-19T12:00:00Z",
-  "level": "INFO",
-  "service": "core-service",
-  "message": "Widget fetch successful",
-  "user_id": 123,
-  "cache_hit": true,
-  "response_time_ms": 45
-}
-```
-
-**Log Levels**:
-- **DEBUG**: Detailed flow (disabled in production)
-- **INFO**: Request/response logs, cache hits/misses
-- **WARNING**: Slow queries, circuit breaker state changes
-- **ERROR**: Failed requests, exceptions
-- **CRITICAL**: System failures, database down
-
-**Log Aggregation**:
-- ELK Stack (Elasticsearch, Logstash, Kibana)
-- Splunk
-- Cloud-native (CloudWatch, Stackdriver)
-
-### Alerting Rules
-
-**Critical Alerts** (PagerDuty):
-- All product services down (5+ minutes)
-- Core Service error rate >5% (1 minute)
-- Redis cache unavailable (1 minute)
-- Database connection pool exhausted
-
-**Warning Alerts** (Slack):
-- Cache hit rate <70% (15 minutes)
-- Response time P95 >500ms (5 minutes)
-- Circuit breaker OPEN for any service (1 minute)
-
-### Tracing
-
-**Distributed Tracing** (OpenTelemetry):
-```
-Trace ID: 1a2b3c4d5e6f
-├─ Core Service: GET /home [180ms]
-│  ├─ Redis: GET cache [5ms]
-│  ├─ Car Service: GET /widget [45ms]
-│  ├─ Health Service: GET /widget [52ms]
-│  ├─ House Service: GET /widget [48ms]
-│  └─ Banking Service: GET /widget [50ms]
-```
-
-**Benefits**:
-- Identify slow services in aggregation flow
-- Debug cache invalidation delays
-- Optimize API call patterns
-
----
-
-## Scalability Roadmap
-
-### Current Bottlenecks
-
-1. **Single Redis Instance**:
-   - Limit: ~50,000 requests/second
-   - Solution: Redis Cluster with sharding
-
-2. **Global Cache Key**:
-   - All users share same cache (`sdui:home_page:v1`)
-   - Solution: Per-user caching (`sdui:home_page:v1:user:{user_id}`)
-
-3. **Synchronous Service Calls**:
-   - Core Service waits for all 4 product services sequentially
-   - Solution: Already implemented (parallel asyncio.gather)
-
-4. **Database Read Load**:
-   - Product services query database for every widget request
-   - Solution: Local caching layer (Redis) per product service
-
-### Phase 1: Per-User Caching (Q1 2026)
-
-**Change**:
-```python
-# Current
-cache_key = "sdui:home_page:v1"
-
-# Future
-cache_key = f"sdui:home_page:v1:user:{user_id}"
-```
-
-**Impact**:
-- +Personalization accuracy (no shared cache pollution)
-- -Redis memory usage (1 cache entry per active user)
-
-**Capacity Planning**:
-- 1M active users
-- 10KB per cache entry
-- Total: 10GB Redis memory (affordable)
-
-### Phase 2: Redis Cluster (Q2 2026)
-
-**Cluster Configuration**:
-- 3 master nodes
-- 3 replica nodes
-- Hash slot distribution: 16,384 slots / 3 = ~5,461 slots per master
-
-**Benefits**:
-- Horizontal scaling of cache capacity
-- Automatic failover (HA)
-- 3x throughput (distributed load)
-
-### Phase 3: CDN Integration (Q3 2026)
-
-**Use Case**: Serve static widget images from CDN.
-
-**Flow**:
-```
-Client → CDN (CloudFront/Cloudflare)
-         ├─ Cache Hit → Return image (10ms)
-         └─ Cache Miss → Origin (S3) → Cache → Return (100ms)
-```
-
-**Impact**:
-- 90% reduction in image load time
-- Lower bandwidth costs for Core Service
-
-### Phase 4: GraphQL API (Q4 2026)
-
-**Motivation**: Allow clients to request specific widget fields.
-
-**Example Query**:
-```graphql
-query HomeWidgets {
-  services(userId: 123) {
-    carInsurance {
-      widgets {
-        id
-        title
-        pricing { price currency }
-      }
-    }
-  }
-}
-```
-
-**Benefits**:
-- Reduced payload size (mobile bandwidth savings)
-- Flexible client-driven queries
-- Better analytics on field usage
-
 ---
 
 ## Decision Rationale
 
 ### Why FastAPI?
 
-**Alternatives Considered**: Django, Flask, Node.js/Express, Go/Gin
-
 **Reasons**:
 1. **Async First**: Native async/await for non-blocking I/O
 2. **Type Safety**: Pydantic models ensure contract validation
-3. **Performance**: 2-3x faster than Flask (benchmarks)
-4. **Developer Experience**: Auto-generated OpenAPI docs
-5. **Ecosystem**: Rich libraries (HTTPX, Redis, Kafka)
+3. **Ecosystem**: Rich libraries (HTTPX, Redis, Kafka)
 
-**Trade-offs**:
-- Smaller community than Django (acceptable)
-- Fewer built-in features than Django (we need minimal framework)
-
-### Why Redis (not Memcached)?
+### Why Redis?
 
 **Reasons**:
 1. **Data Structures**: Strings, hashes, lists (useful for future)
 2. **Persistence**: Optional RDB/AOF snapshots (cache warmup)
-3. **Pub/Sub**: Native pub/sub for SSE (future use)
-4. **Clustering**: Built-in Redis Cluster (horizontal scaling)
+3. **Clustering**: Built-in Redis Cluster (horizontal scaling)
 
-**Trade-offs**:
-- Slightly slower than Memcached (negligible at our scale)
-
-### Why Kafka (not RabbitMQ/SQS)?
+### Why Kafka?
 
 **Reasons**:
-1. **Event Sourcing**: Replay events from any offset (debugging)
-2. **Throughput**: 1M+ messages/second (future-proof)
-3. **Consumer Groups**: Multiple consumers for scaling
-4. **Retention**: Configurable retention (7 days default)
-
-**Trade-offs**:
-- Operational complexity (Zookeeper required)
-- Overkill for low-volume use cases (acceptable for CHECK24 scale)
+1. **Apache**: Open source, community support
 
 ### Why Docker Compose (not Kubernetes)?
 
 **Reasons**:
 1. **Simplicity**: Easy local development setup
 2. **Reproducibility**: Identical environments (dev/staging/prod)
-3. **Learning Curve**: Developers familiar with Docker
 
-**Trade-offs**:
-- Not production-grade orchestration (use ECS/EKS in production)
-- Limited auto-scaling (manual replica scaling)
-
-**Production Path**: Migrate to Kubernetes/ECS once traffic justifies complexity.
+In production Kubernetes should be used for orchestration.
 
 ### Why BFF Pattern?
-
-**Alternatives Considered**: API Gateway, GraphQL Federation, Direct Client-to-Services
 
 **Reasons**:
 1. **Performance**: Centralized caching reduces product service load
@@ -1223,10 +906,10 @@ query HomeWidgets {
 REDIS_HOST=redis
 REDIS_PORT=6379
 KAFKA_BROKER=kafka:9093
-CAR_INSURANCE_SERVICE_URL=http://car-insurance-service:8000
-HEALTH_INSURANCE_SERVICE_URL=http://health-insurance-service:8000
-HOUSE_INSURANCE_SERVICE_URL=http://house-insurance-service:8000
-BANKING_SERVICE_URL=http://banking-service:8000
+CAR_INSURANCE_SERVICE_URL=http://localhost:8000
+HEALTH_INSURANCE_SERVICE_URL=http://localhost:8000
+HOUSE_INSURANCE_SERVICE_URL=http://localhost:8000
+BANKING_SERVICE_URL=http://localhost:8000
 ```
 
 **Product Service** (`car-insurance-service/.env`):
@@ -1238,81 +921,6 @@ DB_NAME=car_insurance_db
 KAFKA_BROKER=kafka:9093
 CORE_SERVICE_URL=http://core-service:8000
 ```
-
-### B. Database Initialization Scripts
-
-**Example**: `car-insurance-service/db_init/init.sql`
-```sql
--- Create tables
-CREATE TABLE widgets (
-    user_id INTEGER,
-    widget_id VARCHAR(100) PRIMARY KEY,
-    component_type VARCHAR(50),
-    priority INTEGER DEFAULT 0,
-    data JSONB NOT NULL,
-    UNIQUE(user_id, widget_id)
-);
-
-CREATE TABLE contracts (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER,
-    widget_id VARCHAR(100),
-    FOREIGN KEY (widget_id) REFERENCES widgets(widget_id)
-);
-
--- Seed sample widgets
-INSERT INTO widgets (user_id, widget_id, component_type, priority, data) VALUES
-(123, 'car_offer_devk', 'Card', 1, '{
-  "title": "Kfz-Versicherung DEVK",
-  "subtitle": "Top-Angebot für VW Golf",
-  "content": "Vollkasko. 500€ Selbstbeteiligung.",
-  "image_url": "assets/images/companies/devk.svg",
-  "pricing": {"price": 89.00, "currency": "€", "frequency": "Monat"},
-  "rating": {"score": 4.8}
-}'::jsonb);
-```
-
-### C. API Request Examples
-
-**cURL Examples**:
-```bash
-# 1. Fetch home widgets
-curl -X GET http://localhost:8000/home
-
-# 2. Create car insurance contract
-curl -X POST http://localhost:8001/widget/car-insurance/contract \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": 123, "widget_id": "car_offer_devk"}'
-
-# 3. Get user contracts
-curl -X GET http://localhost:8000/user/123/contracts
-
-# 4. Delete contract
-curl -X DELETE http://localhost:8001/widget/car-insurance/contract/123/car_offer_devk
-```
-
-### D. Testing Checklist
-
-**Functional Tests**:
-- [ ] Home page loads with widgets
-- [ ] Contract creation triggers cache invalidation
-- [ ] Contract deletion triggers cache invalidation
-- [ ] SSE events received on contract changes
-- [ ] Circuit breaker opens after 5 failures
-- [ ] Fallback widgets displayed on service failure
-
-**Performance Tests**:
-- [ ] Cache hit response time <100ms
-- [ ] Cache miss response time <500ms
-- [ ] 1000 concurrent requests handled without errors
-
-**Resilience Tests**:
-- [ ] System survives Redis restart
-- [ ] System survives Kafka restart
-- [ ] System survives single product service failure
-- [ ] System survives all product services failure
-
----
 
 ## Glossary
 
@@ -1328,14 +936,5 @@ curl -X DELETE http://localhost:8001/widget/car-insurance/contract/123/car_offer
 
 ---
 
-## Contact & Support
-
-**Core Team**: core-engineering@check24.de
-**Product Teams**: See [DEVELOPER_GUIDELINE.md](./DEVELOPER_GUIDELINE.md)
-**DevOps**: devops@check24.de
-
----
-
 *Document Version: 1.0*  
-*Last Updated: December 19, 2025*  
-*Authors: GenDev Application Team*
+*Last Updated: December 27, 2025*  

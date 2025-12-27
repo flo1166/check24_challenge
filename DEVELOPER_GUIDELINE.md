@@ -1,1062 +1,1037 @@
-# CHECK24 Home Widgets - Developer Integration Guide
+# CHECK24 Home Widgets - Developer Guideline
 
-## Welcome, Product Teams! 👋
-
-This guide helps you integrate your product with the CHECK24 Home Widgets platform. You'll learn how to create, deploy, and manage widgets that appear on the centralized Home page across Web, iOS, and Android.
-
-**Target Audience**: Developers in decentralized product teams (Car Insurance, Health Insurance, House Insurance, Banking, etc.)
+**Version**: 1.0  
+**Last Updated**: December 27, 2025  
+**Audience**: Product Team Developers (Car Insurance, Health Insurance, House Insurance, Banking, etc.)
 
 ---
 
 ## Table of Contents
 
-1. [Quick Start](#quick-start)
-2. [Widget JSON Contract](#widget-json-contract)
-3. [API Integration](#api-integration)
-4. [Component Types](#component-types)
-5. [Personalization Guidelines](#personalization-guidelines)
-6. [Testing Your Integration](#testing-your-integration)
-7. [Deployment Checklist](#deployment-checklist)
-8. [Performance Best Practices](#performance-best-practices)
-9. [Troubleshooting](#troubleshooting)
-10. [FAQ](#faq)
+1. [Introduction](#introduction)
+2. [Quick Start](#quick-start)
+3. [Integration Overview](#integration-overview)
+4. [Widget JSON Contract](#widget-json-contract)
+5. [API Specification](#api-specification)
+6. [Personalization & Business Logic](#personalization--business-logic)
+7. [Event Publishing](#event-publishing)
+8. [Database Schema (Reference)](#database-schema-reference)
+9. [Local Development](#local-development)
+10. [Testing](#testing)
+11. [Deployment Checklist](#deployment-checklist)
+12. [Best Practices](#best-practices)
+13. [Troubleshooting](#troubleshooting)
+14. [FAQ](#faq)
+
+---
+
+## Introduction
+
+Welcome! This guide helps your product team integrate with the **CHECK24 Home Widgets Platform**.
+
+**What You'll Build**:
+- A FastAPI service that generates personalized widget content for your product
+- API endpoints that conform to the Home platform's JSON contract
+- Event publishing to keep the Home page synchronized with user actions
+
+**What You DON'T Build**:
+- UI components (clients render based on your JSON)
+- Caching logic (handled by Core Service)
+- Cross-product aggregation (handled by Core Service)
+
+**Prerequisites**:
+- Python 3.12+
+- FastAPI knowledge
+- PostgreSQL database
+- Kafka access (for event publishing)
+- Docker (for local testing)
 
 ---
 
 ## Quick Start
 
-### Prerequisites
+### 1. Install Dependencies
 
-✅ **What You Need**:
-- Python 3.11+ environment
-- PostgreSQL database (for widget storage)
-- Kafka access (for event publishing)
-- Docker (for local testing)
-
-✅ **What You DON'T Need**:
-- Access to Core Service codebase
-- Coordination with other product teams
-- Special permissions (you own your service)
-
-### 5-Minute Setup
-
-**Step 1**: Clone the product service template
 ```bash
-git clone https://github.com/check24/product-service-template.git my-product-service
-cd my-product-service
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-**Step 2**: Configure your service
+### 2. Configure Environment
+
+Create `.env`:
+```env
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=your_product_db
+DB_USER=your_user
+DB_PASSWORD=your_password
+
+# Kafka
+KAFKA_BROKER=kafka:9093
+
+# Core Service
+CORE_SERVICE_URL=http://core-service:8000
+```
+
+### 3. Test Integration
+
 ```bash
-cp .env.example .env
-# Edit .env with your database credentials
+# Health check
+curl http://localhost:8001/health
+
+# Fetch widgets
+curl http://localhost:8001/widget/car-insurance
 ```
 
-**Step 3**: Initialize database
-```bash
-docker-compose up -d postgres
-python scripts/init_db.py
-```
+---
 
-**Step 4**: Run your service
-```bash
-uvicorn app.main:app --reload --port 8001
-```
+## Integration Overview
 
-**Step 5**: Test widget retrieval
-```bash
-curl http://localhost:8001/widget/my-product
-```
+### Your Responsibilities
 
-**Expected Response**:
-```json
-{
-  "widgets": [
-    {
-      "widget_id": "sample_widget_1",
-      "component_type": "Card",
-      "priority": 1,
-      "data": {
-        "title": "Sample Product Offer",
-        "content": "Special deal for you!",
-        "pricing": {
-          "price": 99.00,
-          "currency": "€"
-        }
-      }
-    }
-  ]
-}
-```
+1. **Generate Widget JSON**: Return personalized widgets in the correct format
+2. **Manage Contracts**: Handle user purchases (create/delete contracts)
+3. **Publish Events**: Notify Core Service when user state changes
+4. **Personalization Logic**: Decide which widgets to show each user
+5. **Data Ownership**: Maintain your own database and business logic
 
-🎉 **Success!** You've created your first widget.
+### What Core Service Provides
+
+- Widget aggregation from all products
+- Redis caching with SWR pattern
+- Circuit breaker protection for your service
+- Real-time updates via SSE
+- Multi-platform delivery (Web, Android)
 
 ---
 
 ## Widget JSON Contract
 
-### The Golden Rule
+### Overview
 
-**All platforms (Web, iOS, Android) consume the SAME JSON structure.**
+All widgets must conform to this JSON schema. The Core Service validates and aggregates your widgets.
 
-This means:
-- ✅ Change JSON → All platforms update
-- ❌ No separate APIs for Web vs. App
-- ✅ A/B testing via JSON variations
+### Complete Widget Structure
 
-### Base Widget Structure
-
-Every widget must follow this schema:
-
-```json
-{
-  "widget_id": "unique_identifier_123",
-  "component_type": "Card",
-  "priority": 1,
-  "data": {
-    // Component-specific fields
-  }
+```typescript
+interface Widget {
+  // === Identification ===
+  widget_id: string;              // Unique ID (e.g., "car_offer_devk_123")
+  
+  // === Component Grouping ===
+  component_id: string;           // Groups widgets (e.g., "carousel_featured")
+  component_order: number;        // Display order of component (1 = first)
+  component_type: ComponentType;  // How to display widgets in this component
+  
+  // === Widget Metadata ===
+  priority: number;               // Order within component (higher = earlier)
+  service?: string;               // Auto-added by Core (e.g., "car_insurance")
+  
+  // === Content ===
+  data: WidgetData;               // Your custom data for the widget
 }
 ```
 
-**Field Descriptions**:
+### Component Types
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `widget_id` | string | ✅ Yes | Unique identifier (use product prefix, e.g., `car_offer_123`) |
-| `component_type` | string | ✅ Yes | UI component type (see [Component Types](#component-types)) |
-| `priority` | integer | ⚠️ Optional | Lower = higher priority (default: 0) |
-| `data` | object | ✅ Yes | Component-specific data fields |
+```typescript
+type ComponentType = 
+  | 'Carousel'        // Horizontal scrolling (3-6 widgets)
+  | 'ProductGrid'     // Grid layout (4-12 widgets)
+  | 'Card'            // Single card
+  | 'InfoBox'         // Information display
+  | 'SectionHeader';  // Section title
+```
 
-### Data Field Guidelines
+**Usage Examples**:
+- `Carousel`: Featured deals, trending products
+- `ProductGrid`: Browse all offers
+- `Card`: Single promotional widget
+- `InfoBox`: Educational content, tips
+- `SectionHeader`: "Your Personalized Deals"
 
-**Common Fields** (supported by most components):
+Of course, if you have own ideas: check with the core-service to implement components / widgets types at UI level. You can use them afterwards.
+
+### Widget Data Schema
+
+```typescript
+interface WidgetData {
+  // === Common Fields (all widget types) ===
+  title?: string;                 // Primary heading
+  subtitle?: string;              // Secondary heading
+  content?: string;               // Body text
+  image_url?: string;             // Product/brand image
+  
+  // === Pricing Information ===
+  pricing?: {
+    price: number;                // Current price
+    currency: string;             // "EUR", "USD"
+    frequency?: 'monthly' | 'yearly' | 'one-time';
+    original_price?: number;      // For discounts
+    discount_percentage?: number; // e.g., 20 (for "20% off")
+  };
+  
+  // === Rating & Social Proof ===
+  rating?: {
+    score: number;                // 0-5
+    count?: number;               // Number of reviews
+    source?: string;              // "Trustpilot", "Google Reviews"
+  };
+  
+  // === Provider/Company ===
+  provider?: {
+    name: string;                 // "DEVK", "Allianz"
+    logo_url?: string;            // Brand logo
+  };
+  
+  // === Call-to-Action ===
+  cta?: {
+    text: string;                 // "Get Quote", "Compare Now"
+    url?: string;                 // Deep link or web URL
+    action?: 'purchase' | 'compare' | 'details' | 'learn_more';
+  };
+  
+  // === Component-Specific ===
+  header?: string;                // For SectionHeader
+  body?: string;                  // For InfoBox
+  features?: string[];            // For ProductGrid items
+  badge?: string;                 // "Best Value", "Popular", "New"
+  
+  // === Custom Fields ===
+  [key: string]: any;             // Product-specific data
+}
+```
+
+### Example: Car Insurance Widget
 
 ```json
 {
+  "widget_id": "car_offer_devk_comprehensive_123",
+  "component_id": "carousel_featured_deals",
+  "component_order": 1,
+  "component_type": "Carousel",
+  "priority": 10,
   "data": {
-    "title": "Main heading text",
-    "subtitle": "Secondary heading",
-    "content": "Descriptive text content",
-    "image_url": "assets/images/companies/logo.svg",
-    "cta_link": "/product/compare",
+    "title": "Comprehensive Car Insurance",
+    "subtitle": "Full coverage with roadside assistance",
+    "image_url": "/assets/companies/devk.svg",
     "pricing": {
-      "price": 89.00,
-      "currency": "€",
-      "frequency": "Monat"
+      "price": 45.99,
+      "currency": "EUR",
+      "frequency": "monthly",
+      "original_price": 59.99,
+      "discount_percentage": 23
     },
     "rating": {
-      "score": 4.8,
-      "label": "Sehr gut"
-    }
+      "score": 4.7,
+      "count": 2431,
+      "source": "Trustpilot"
+    },
+    "provider": {
+      "name": "DEVK",
+      "logo_url": "/assets/companies/devk.svg"
+    },
+    "cta": {
+      "text": "Get Quote",
+      "action": "compare"
+    },
+    "features": [
+      "24/7 Roadside Assistance",
+      "Windshield Coverage",
+      "Rental Car Included"
+    ],
+    "badge": "Best Value"
   }
 }
 ```
 
-**⚠️ Important Rules**:
-- All prices must be `number` type (not strings)
-- Image URLs must be relative paths starting with `assets/`
-- Text fields should be pre-formatted (clients don't do text processing)
-- No PII (email, phone, address) in widget data
+### Validation Rules
+
+**Required Fields**:
+- `widget_id` (must be unique across your service)
+- `component_id`
+- `component_order`
+- `component_type`
+- `priority`
+- `data` (object, not null)
+
+**Field Constraints**:
+- `widget_id`: 1-100 characters, no spaces
+- `component_order`: Integer >= 0
+- `priority`: Integer (higher = more important)
+- `pricing.price`: >= 0
+- `rating.score`: 0-5
+
+**Optional but Recommended**:
+- `data.title`
+- `data.cta`
+- `data.provider`
 
 ---
 
-## API Integration
+## API Specification
 
 ### Required Endpoints
 
-Your product service must implement these 4 endpoints:
+Your service MUST implement these endpoints:
 
-#### 1. GET `/widget/{your-product-key}`
+#### 1. Widget Retrieval
 
-**Purpose**: Core Service fetches widgets for a user
+**Endpoint**: `GET /widget/{service-key}`
 
-**Request**:
-```http
-GET /widget/car-insurance HTTP/1.1
-Host: car-insurance-service:8000
-```
+**Example**: `GET /widget/car-insurance`
 
-**Response** (200 OK):
+**Purpose**: Core Service calls this to fetch all widgets for a user
+
+**Request**: No body required (user context determined by your logic)
+
+**Response**:
 ```json
 {
   "widgets": [
     {
-      "widget_id": "car_offer_devk_123",
-      "component_type": "Card",
-      "priority": 1,
-      "data": {
-        "title": "Kfz-Versicherung DEVK",
-        "subtitle": "Top-Angebot für VW Golf",
-        "content": "Vollkasko. 500€ Selbstbeteiligung. Bis zu 30% sparen.",
-        "image_url": "assets/images/companies/devk.svg",
-        "pricing": {
-          "price": 89.00,
-          "currency": "€",
-          "frequency": "Monat"
-        },
-        "rating": {
-          "score": 4.8
-        }
-      }
-    }
+      "widget_id": "...",
+      "component_id": "...",
+      "component_order": 1,
+      "component_type": "Carousel",
+      "priority": 10,
+      "data": { ... }
+    },
+    ...
   ]
 }
 ```
 
-**Logic Examples**:
+**Personalization Logic**:
 ```python
-# Example 1: User has no contract → show offers
-if not user_has_contract(user_id):
-    return {"widgets": get_top_offers(user_id)}
-
-# Example 2: User has contract → hide offers
-if user_has_contract(user_id):
-    return {"widgets": []}
-
-# Example 3: User searched recently → personalize
-if user_searched_recently(user_id):
-    return {"widgets": get_recommended_offers(user_id, search_params)}
+@app.get("/widget/car-insurance")
+def get_widgets(db: Session = Depends(get_db)):
+    user_id = 123  # Get from session/JWT in production
+    
+    # 1. Check if user has active contract
+    has_contract = db.query(Contracts).filter(
+        Contracts.user_id == user_id
+    ).count() > 0
+    
+    if has_contract:
+        return {"widgets": []}  # Hide widgets if user is customer
+    
+    # 2. Fetch personalized widgets
+    widgets = db.query(Widget).filter(
+        Widget.user_id == user_id
+    ).order_by(Widget.priority.desc()).all()
+    
+    return {"widgets": [w.to_sdui_format() for w in widgets]}
 ```
+---
 
-**Performance Requirements**:
-- **Response Time**: <5 seconds (hard timeout)
-- **Payload Size**: <100KB (recommended)
-- **Widget Count**: 3-6 widgets (more = slower Home load)
+#### 2. Contract Creation
 
-#### 2. POST `/widget/{your-product-key}/contract`
+**Endpoint**: `POST /widget/{service-key}/contract`
 
-**Purpose**: User purchases/activates your product
+**Example**: `POST /widget/car-insurance/contract`
 
-**Request**:
-```http
-POST /widget/car-insurance/contract HTTP/1.1
-Content-Type: application/json
+**Purpose**: User purchases/subscribes to your product
 
+**Request Body**:
+```json
 {
   "user_id": 123,
   "widget_id": "car_offer_devk_123"
 }
 ```
 
-**Response** (200 OK):
+**Response**:
 ```json
 {
+  "message": "Contract created successfully",
   "contract_id": 789,
   "user_id": 123,
-  "widget_id": "car_offer_devk_123",
-  "message": "Contract created successfully"
-}
-```
-
-**Required Side Effects**:
-1. ✅ Save contract to your database
-2. ✅ Publish Kafka event: `user.{product}.purchased`
-3. ✅ Call Core Service: `POST /cache/invalidate`
-
-**Example Implementation**:
-```python
-@app.post("/widget/car-insurance/contract")
-async def create_contract(request: ContractRequest):
-    # 1. Save to database
-    contract = save_contract(request.user_id, request.widget_id)
-    
-    # 2. Invalidate Core Service cache (sync)
-    await invalidate_core_cache()
-    
-    # 3. Publish Kafka event (async)
-    await publish_event(
-        topic="user.car.insurance.purchased",
-        event={
-            "event_type": "contract_created",
-            "user_id": request.user_id,
-            "widget_id": request.widget_id,
-            "contract_id": contract.id,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    )
-    
-    return {"contract_id": contract.id, "message": "Success"}
-```
-
-#### 3. GET `/widget/{your-product-key}/contract/{user_id}`
-
-**Purpose**: Retrieve user's active contract data
-
-**Request**:
-```http
-GET /widget/car-insurance/contract/123 HTTP/1.1
-```
-
-**Response** (200 OK):
-```json
-{
-  "widget_id": "car_offer_devk_123",
-  "data": {
-    "title": "Ihre DEVK Kfz-Versicherung",
-    "subtitle": "VW Golf 7 - Vollkasko",
-    "image_url": "assets/images/companies/devk.svg",
-    "pricing": {
-      "price": 89.00,
-      "currency": "€",
-      "frequency": "Monat"
-    }
-  }
-}
-```
-
-**Response** (404 Not Found):
-```json
-{
-  "detail": "No contracts found."
-}
-```
-
-#### 4. DELETE `/widget/{your-product-key}/contract/{user_id}/{widget_id}`
-
-**Purpose**: User cancels/deletes contract
-
-**Request**:
-```http
-DELETE /widget/car-insurance/contract/123/car_offer_devk_123 HTTP/1.1
-```
-
-**Response** (200 OK):
-```json
-{
-  "contract_id": 789,
-  "message": "Contract deleted successfully"
-}
-```
-
-**Required Side Effects**:
-1. ✅ Delete contract from your database
-2. ✅ Publish Kafka event: `user.{product}.purchased` (event_type: "contract_deleted")
-3. ✅ Call Core Service: `POST /cache/invalidate`
-
----
-
-## Component Types
-
-### 1. Card (Product Offer)
-
-**Best For**: Product recommendations, comparison offers
-
-**Example**:
-```json
-{
-  "component_type": "Card",
-  "data": {
-    "title": "Kfz-Versicherung vergleichen",
-    "subtitle": "Top-Angebot für Sie",
-    "content": "Vollkasko ab 89€/Monat. 500€ SB. Bis zu 30% sparen.",
-    "image_url": "assets/images/cars/vw-golf-7-used.png",
-    "cta_link": "/versicherungen/kfz/vergleich",
-    "pricing": {
-      "price": 89.00,
-      "currency": "€",
-      "frequency": "Monat"
-    },
-    "rating": {
-      "score": 4.8
-    }
-  }
-}
-```
-
-**Visual Example**:
-```
-┌─────────────────────────────────┐
-│  [Image: VW Golf]               │
-│                                 │
-│  Kfz-Versicherung vergleichen   │
-│  Top-Angebot für Sie            │
-│                                 │
-│  89,00 €/Monat                  │
-│  ★ 4.8                          │
-│                                 │
-│  Vollkasko ab 89€/Monat...      │
-│                                 │
-│  [ Add to Cart ]                │
-└─────────────────────────────────┘
-```
-
-### 2. InfoBox (Informational Content)
-
-**Best For**: Tips, warnings, alternative suggestions
-
-**Example**:
-```json
-{
-  "component_type": "InfoBox",
-  "data": {
-    "title": "Wussten Sie schon?",
-    "subtitle": "Sparpotenzial bei Hausratversicherung",
-    "content": "Viele Versicherte zahlen zu viel. Vergleichen Sie jetzt und sparen Sie bis zu 40%.",
-    "footer": "Jetzt Vergleich starten →"
-  }
-}
-```
-
-**Visual Example**:
-```
-┌────────────────────────────────────┐
-│ ℹ️  Wussten Sie schon?            │
-│    Sparpotenzial bei Hausrat...   │
-│                                    │
-│ Viele Versicherte zahlen zu viel. │
-│ Vergleichen Sie jetzt...           │
-│                                    │
-│ ──────────────────────────────────│
-│ Jetzt Vergleich starten →         │
-└────────────────────────────────────┘
-```
-
-### 3. ProductGrid (Multiple Products)
-
-**Best For**: Showcasing 4-8 related products in a grid
-
-**Example**:
-```json
-{
-  "component_type": "ProductGrid",
-  "data": {
-    "title": "Beliebte Gebrauchtwagen",
-    "products": [
-      {
-        "id": "vw_golf_1",
-        "title": "VW Golf 7",
-        "image_url": "assets/images/cars/vw-golf-7-used.png",
-        "pricing": {
-          "price": 15990.00,
-          "currency": "€"
-        },
-        "rating": 4.7
-      },
-      {
-        "id": "bmw_3series_1",
-        "title": "BMW 3er",
-        "image_url": "assets/images/cars/bmw-3series-used.png",
-        "pricing": {
-          "price": 22500.00,
-          "currency": "€"
-        },
-        "rating": 4.9
-      }
-    ]
-  }
-}
-```
-
-**Visual Example**:
-```
-Beliebte Gebrauchtwagen
-┌──────────┐  ┌──────────┐
-│ VW Golf  │  │ BMW 3er  │
-│ [Image]  │  │ [Image]  │
-│ 15.990€  │  │ 22.500€  │
-│ ★ 4.7    │  │ ★ 4.9    │
-└──────────┘  └──────────┘
-┌──────────┐  ┌──────────┐
-│ Audi A4  │  │ Toyota   │
-│ ...      │  │ ...      │
-└──────────┘  └──────────┘
-```
-
-### 4. SectionHeader (Category Title)
-
-**Best For**: Introducing a group of widgets, collapsible sections
-
-**Example**:
-```json
-{
-  "component_type": "SectionHeader",
-  "data": {
-    "title": "Versicherungen",
-    "subtitle": "Hide Recommendations",
-    "description": "Ihre personalisierten Versicherungsangebote"
-  }
-}
-```
-
-**Visual Example**:
-```
-┌────────────────────────────────────┐
-│ Versicherungen            [↕️]     │
-│ Ihre personalisierten...           │
-└────────────────────────────────────┘
-```
-
----
-
-## Personalization Guidelines
-
-### User Context
-
-**Available Data** (you can use for personalization):
-- `user_id`: Unique user identifier
-- User's past contracts (in your service)
-- User's search history (in your service)
-- User's browsing behavior (in your service)
-
-**NOT Available** (centralized data):
-- ❌ Cross-product behavior (e.g., user searched flights → show car insurance)
-- ❌ Global user preferences (managed by Core)
-- ❌ Other products' contract data (privacy)
-
-### Personalization Strategies
-
-**Strategy 1: Contract-Based**
-```python
-def get_widgets(user_id):
-    if has_contract(user_id):
-        return []  # Don't show offers if already customer
-    else:
-        return get_top_offers(user_id)
-```
-
-**Strategy 2: Search-Based**
-```python
-def get_widgets(user_id):
-    recent_search = get_user_search(user_id, days=7)
-    if recent_search:
-        return get_offers_matching(recent_search)
-    else:
-        return get_default_offers()
-```
-
-**Strategy 3: Behavioral**
-```python
-def get_widgets(user_id):
-    user_segment = classify_user(user_id)  # "bargain_hunter", "premium", etc.
-    return get_offers_for_segment(user_segment)
-```
-
-**Strategy 4: Time-Based**
-```python
-def get_widgets(user_id):
-    if is_weekend():
-        return get_weekend_offers()
-    elif is_holiday_season():
-        return get_seasonal_offers()
-    else:
-        return get_default_offers()
-```
-
-### A/B Testing
-
-**Example**: Test two pricing presentations
-
-**Variant A** (control):
-```json
-{
-  "widget_id": "car_offer_variant_a",
-  "data": {
-    "title": "Kfz-Versicherung",
-    "pricing": {"price": 89.00, "currency": "€", "frequency": "Monat"}
-  }
-}
-```
-
-**Variant B** (yearly pricing):
-```json
-{
-  "widget_id": "car_offer_variant_b",
-  "data": {
-    "title": "Kfz-Versicherung",
-    "pricing": {"price": 1068.00, "currency": "€", "frequency": "Jahr"}
-  }
+  "widget_id": "car_offer_devk_123"
 }
 ```
 
 **Implementation**:
 ```python
-def get_widgets(user_id):
-    variant = assign_variant(user_id)  # 50/50 split
-    if variant == "A":
-        return [get_monthly_pricing_widget()]
-    else:
-        return [get_yearly_pricing_widget()]
+@app.post("/widget/car-insurance/contract")
+async def create_contract(
+    contract_data: ContractRequest,
+    db: Session = Depends(get_db)
+):
+    user_id = contract_data.user_id
+    widget_id = contract_data.widget_id
+    
+    # 1. Create contract in database
+    new_contract = Contracts(user_id=user_id, widget_id=widget_id)
+    db.add(new_contract)
+    db.commit()
+    db.refresh(new_contract)
+    
+    # 2. CRITICAL: Invalidate Core Service cache
+    await invalidate_core_cache()
+    
+    # 3. Publish Kafka event for SSE notifications
+    await publish_contract_event(
+        event_type="contract_created",
+        user_id=user_id,
+        widget_id=widget_id,
+        contract_id=new_contract.id
+    )
+    
+    return {
+        "message": "Contract created successfully",
+        "contract_id": new_contract.id,
+        "user_id": user_id,
+        "widget_id": widget_id
+    }
 ```
+
+**CRITICAL**: You must invalidate the cache after creating a contract, otherwise users will still see your widgets.
 
 ---
 
-## Testing Your Integration
+#### 3. Contract Deletion
 
-### Local Testing Setup
+**Endpoint**: `DELETE /widget/{service-key}/contract/{user_id}/{widget_id}`
 
-**Step 1**: Start Core Service + Your Service
-```bash
-# Terminal 1: Core Service
-cd core-service
-docker-compose up redis kafka zookeeper
-uvicorn app.main:app --port 8000
+**Example**: `DELETE /widget/car-insurance/contract/123/car_offer_devk_123`
 
-# Terminal 2: Your Service
-cd my-product-service
-uvicorn app.main:app --port 8001
-```
+**Purpose**: User cancels subscription
 
-**Step 2**: Test Widget Retrieval
-```bash
-# Direct service test
-curl http://localhost:8001/widget/my-product
-
-# Core Service aggregation test
-curl http://localhost:8000/home
-```
-
-**Step 3**: Test Contract Creation
-```bash
-curl -X POST http://localhost:8001/widget/my-product/contract \
-  -H "Content-Type: application/json" \
-  -d '{"user_id": 123, "widget_id": "test_widget_1"}'
-```
-
-**Step 4**: Verify Cache Invalidation
-```bash
-# 1. Check Redis cache before
-docker exec -it redis redis-cli GET "sdui:home_page:v1"
-
-# 2. Create contract (triggers invalidation)
-# (run curl command from Step 3)
-
-# 3. Check Redis cache after (should be empty)
-docker exec -it redis redis-cli GET "sdui:home_page:v1"
-```
-
-### Integration Tests
-
-**Example Test Suite** (using pytest):
-
-```python
-import pytest
-from httpx import AsyncClient
-
-@pytest.mark.asyncio
-async def test_widget_retrieval():
-    async with AsyncClient() as client:
-        response = await client.get("http://localhost:8001/widget/my-product")
-        assert response.status_code == 200
-        data = response.json()
-        assert "widgets" in data
-        assert len(data["widgets"]) > 0
-
-@pytest.mark.asyncio
-async def test_contract_creation():
-    async with AsyncClient() as client:
-        response = await client.post(
-            "http://localhost:8001/widget/my-product/contract",
-            json={"user_id": 999, "widget_id": "test_widget"}
-        )
-        assert response.status_code == 200
-        assert "contract_id" in response.json()
-
-@pytest.mark.asyncio
-async def test_contract_hides_widgets():
-    async with AsyncClient() as client:
-        # Before: User has no contract, widgets visible
-        response = await client.get("http://localhost:8001/widget/my-product")
-        assert len(response.json()["widgets"]) > 0
-        
-        # Create contract
-        await client.post(
-            "http://localhost:8001/widget/my-product/contract",
-            json={"user_id": 999, "widget_id": "test_widget"}
-        )
-        
-        # After: User has contract, widgets hidden
-        response = await client.get("http://localhost:8001/widget/my-product")
-        assert len(response.json()["widgets"]) == 0
-```
-
-### Platform Testing
-
-**Web Client**:
-```bash
-cd web-client
-npm install
-npm run dev
-# Open http://localhost:5173
-```
-
-**Android App**:
-```bash
-cd android-client
-./gradlew assembleDebug
-adb install app/build/outputs/apk/debug/app-debug.apk
-```
-
-**iOS App**:
-```bash
-cd ios-client
-pod install
-open Check24.xcworkspace
-# Build & Run in Xcode
-```
-
----
-
-## Deployment Checklist
-
-### Pre-Deployment
-
-- [ ] **Database Migration**: Run schema updates
-- [ ] **Environment Variables**: Configure production values
-- [ ] **Secret Management**: Rotate API keys, DB passwords
-- [ ] **Health Check**: Implement `/health` endpoint
-- [ ] **Logging**: Ensure structured JSON logging
-- [ ] **Monitoring**: Set up alerts for errors/latency
-
-### Deployment Steps
-
-1. **Build Docker Image**:
-   ```bash
-   docker build -t my-product-service:v1.0.0 .
-   docker tag my-product-service:v1.0.0 registry.check24.de/my-product-service:v1.0.0
-   docker push registry.check24.de/my-product-service:v1.0.0
-   ```
-
-2. **Update Kubernetes/ECS Config**:
-   ```yaml
-   # k8s deployment
-   containers:
-     - name: my-product-service
-       image: registry.check24.de/my-product-service:v1.0.0
-       env:
-         - name: DB_HOST
-           value: "production-db.check24.de"
-   ```
-
-3. **Rolling Update**:
-   ```bash
-   kubectl set image deployment/my-product-service \
-     my-product-service=registry.check24.de/my-product-service:v1.0.0
-   ```
-
-4. **Verify Health**:
-   ```bash
-   curl https://my-product-service.check24.de/health
-   ```
-
-### Post-Deployment
-
-- [ ] **Smoke Tests**: Test widget retrieval, contract creation
-- [ ] **Monitor Logs**: Check for errors in first 30 minutes
-- [ ] **Cache Metrics**: Verify cache hit rate in Core Service
-- [ ] **Performance**: Check response times (should be <5s)
-
----
-
-## Performance Best Practices
-
-### Database Optimization
-
-**1. Index Widget Queries**:
-```sql
-CREATE INDEX idx_widgets_user_id ON widgets(user_id);
-CREATE INDEX idx_contracts_user_id ON contracts(user_id);
-```
-
-**2. Use Connection Pooling**:
-```python
-from sqlalchemy import create_engine
-
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=20,           # Max connections
-    max_overflow=10,        # Extra connections under load
-    pool_pre_ping=True      # Test connections before use
-)
-```
-
-**3. Avoid N+1 Queries**:
-```python
-# ❌ Bad: N+1 queries
-widgets = session.query(Widget).filter(Widget.user_id == 123).all()
-for widget in widgets:
-    contract = session.query(Contract).filter(Contract.widget_id == widget.id).first()
-
-# ✅ Good: Single join query
-widgets = (
-    session.query(Widget)
-    .outerjoin(Contract, Widget.widget_id == Contract.widget_id)
-    .filter(Widget.user_id == 123)
-    .all()
-)
-```
-
-### API Response Optimization
-
-**1. Limit Widget Count**:
-```python
-# Return max 6 widgets (too many = slow Home load)
-widgets = get_top_widgets(user_id, limit=6)
-```
-
-**2. Compress Large Images**:
-```bash
-# Optimize SVG files
-svgo assets/images/companies/logo.svg
-
-# Convert PNG to WebP (smaller size)
-cwebp assets/images/cars/vw-golf.png -o assets/images/cars/vw-golf.webp
-```
-
-**3. Minimize JSON Payload**:
+**Response**:
 ```json
-// ❌ Bad: Unnecessary fields
 {
-  "widget_id": "car_offer_123",
-  "data": {
-    "internal_id": 456789,          // Not needed by clients
-    "created_at": "2025-01-01",     // Not displayed
-    "debug_info": {...}             // Remove in production
-  }
-}
-
-// ✅ Good: Only essential fields
-{
-  "widget_id": "car_offer_123",
-  "data": {
-    "title": "Kfz-Versicherung",
-    "pricing": {"price": 89.00, "currency": "€"}
-  }
+  "message": "Contract deleted successfully",
+  "contract_id": 789,
+  "user_id": 123,
+  "widget_id": "car_offer_devk_123"
 }
 ```
 
-### Kafka Event Publishing
+**Implementation**: Same pattern as creation, but delete from DB
 
-**1. Async Publishing**:
-```python
-# ❌ Bad: Blocks request until Kafka confirms
-await producer.send_and_wait(topic, event)
+---
 
-# ✅ Good: Fire-and-forget (non-blocking)
-await producer.send(topic, event)
+#### 4. User Contracts
+
+**Endpoint**: `GET /widget/{service-key}/contract/{user_id}`
+
+**Example**: `GET /widget/car-insurance/contract/123`
+
+**Purpose**: Core Service fetches user's active contract widget
+
+**Response**: Single widget JSON (not array)
+
+```json
+{
+  "widget_id": "car_offer_devk_123",
+  "component_id": "user_contracts",
+  "component_type": "Card",
+  "priority": 1,
+  "data": {
+    "title": "Your Car Insurance",
+    "subtitle": "DEVK Comprehensive",
+    "content": "Active since Jan 2025"
+  }
+}
 ```
 
-**2. Batch Events**:
-```python
-# If publishing many events, batch them
-events = [event1, event2, event3]
-await producer.send_batch(topic, events)
+**Use Case**: Showing user their purchased products on a "My Contracts" page
+
+---
+
+#### 5. Health Check
+
+**Endpoint**: `GET /health`
+
+**Purpose**: Core Service monitors your availability
+
+**Response**:
+```json
+{
+  "status": "healthy",
+  "service": "car-insurance-service"
+}
 ```
+
+**Implementation**:
+```python
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "service": "car-insurance-service"}
+```
+
+---
+
+### Error Handling
+
+**Standard HTTP Codes**:
+- `200`: Success
+- `404`: Resource not found (e.g., no contracts for user)
+- `500`: Internal server error
+- `503`: Service unavailable (database down)
+
+**Error Response Format**:
+```json
+{
+  "detail": "Database connection failed",
+  "error_code": "DB_CONNECTION_ERROR"
+}
+```
+
+**Circuit Breaker**: Core Service has circuit breakers. If your service fails 5 times in a row, it will return fallback widgets instead of calling you.
+
+---
+
+## Personalization & Business Logic
+
+### Decision Framework
+
+**Question**: Which widgets should I show to user X?
+
+**Your Responsibility**: You decide based on:
+- User profile data (age, location, preferences)
+- Purchase history
+- Browsing behavior
+- A/B testing variants
+- Inventory availability
+- Pricing strategy
+
+**Example Logic**:
+```python
+def get_personalized_widgets(user_id: int, db: Session):
+    user = get_user_profile(user_id)
+    
+    # Example: Young drivers see different insurance options
+    if user.age < 25:
+        return get_young_driver_widgets(db)
+    
+    # Example: Users in Bavaria see regional providers
+    if user.location == "Bavaria":
+        return get_regional_widgets(db, region="Bavaria")
+    
+    # Default: Show top-rated deals
+    return get_top_rated_widgets(db)
+```
+
+### Component Grouping Strategy
+
+**Use `component_order` to control layout**:
+
+```python
+# Component 1: Featured deals (carousel)
+widgets_featured = [
+    {"component_id": "carousel_featured", "component_order": 1, ...},
+    {"component_id": "carousel_featured", "component_order": 1, ...},
+]
+
+# Component 2: All offers (grid)
+widgets_all = [
+    {"component_id": "grid_all_offers", "component_order": 2, ...},
+    {"component_id": "grid_all_offers", "component_order": 2, ...},
+]
+
+return {"widgets": widgets_featured + widgets_all}
+```
+
+**Result**: Users see featured carousel first, then browseable grid below.
+
+### A/B Testing
+
+**Approach 1**: Server-side variants
+```python
+def get_widgets(user_id):
+    variant = get_ab_variant(user_id)  # "control" or "variant_a"
+    
+    if variant == "variant_a":
+        return get_high_discount_widgets()
+    else:
+        return get_standard_widgets()
+```
+
+**Approach 2**: Multiple widgets, let client decide
+```python
+return {
+    "widgets": [
+        {"widget_id": "offer_v1", "ab_variant": "control", ...},
+        {"widget_id": "offer_v2", "ab_variant": "variant_a", ...},
+    ]
+}
+```
+
+---
+
+## Event Publishing
+
+### Why Publish Events?
+
+When a user creates or deletes a contract, the Home page cache must be invalidated so the user sees updated widgets.
+
+**Dual Invalidation Strategy**:
+1. **Sync HTTP POST**: Immediately invalidate Core Service cache
+2. **Async Kafka Event**: Notify all connected clients via SSE
+
+### Cache Invalidation (Sync)
+
+```python
+import httpx
+
+async def invalidate_core_cache():
+    """
+    Call Core Service to invalidate cache synchronously.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{CORE_SERVICE_URL}/cache/invalidate",
+                timeout=5.0
+            )
+            
+            if response.status_code == 200:
+                logger.info("Cache invalidated successfully")
+                return True
+            else:
+                logger.warning(f"Cache invalidation failed: {response.status_code}")
+                return False
+                
+    except httpx.TimeoutException:
+        logger.error("Cache invalidation timeout")
+        return False
+    except Exception as e:
+        logger.error(f"Cache invalidation error: {e}")
+        return False
+```
+
+### Kafka Event Publishing (Async)
+
+**Setup Kafka Producer**:
+```python
+from aiokafka import AIOKafkaProducer
+import json
+
+kafka_producer: AIOKafkaProducer = None
+
+async def init_kafka_producer():
+    global kafka_producer
+    
+    kafka_producer = AIOKafkaProducer(
+        bootstrap_servers=KAFKA_BROKER,
+        value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    )
+    
+    await kafka_producer.start()
+```
+
+**Publish Event**:
+```python
+async def publish_contract_event(
+    event_type: str,
+    user_id: int,
+    widget_id: str,
+    contract_id: int = None
+):
+    """
+    Publish contract event to Kafka.
+    
+    event_type: "contract_created" or "contract_deleted"
+    """
+    event = {
+        "event_type": event_type,
+        "user_id": user_id,
+        "widget_id": widget_id,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    
+    if contract_id:
+        event["contract_id"] = contract_id
+    
+    # Publish to your service's topic
+    await kafka_producer.send_and_wait(
+        "user.car.insurance.purchased",  # YOUR_TOPIC_NAME
+        event
+    )
+```
+
+**Topic Naming Convention**:
+- Car Insurance: `user.car.insurance.purchased`
+- Health Insurance: `user.health.insurance.purchased`
+- House Insurance: `user.house.insurance.purchased`
+- Banking: `user.banking.product.purchased`
+
+**Event Schema**:
+```json
+{
+  "event_type": "contract_created",
+  "user_id": 123,
+  "widget_id": "car_offer_devk_123",
+  "contract_id": 789,
+  "timestamp": "2025-12-27T10:30:00Z"
+}
+```
+
+---
+
+## Database Schema (Reference)
+
+You are free to design your own database schema, but here's the reference implementation used in the PoC:
+
+### Components Table
+
+```sql
+CREATE TABLE components (
+    component_id VARCHAR(100) NOT NULL,
+    user_id INTEGER NOT NULL,
+    component_type VARCHAR(50) NOT NULL,
+    component_order INTEGER DEFAULT 0,
+    PRIMARY KEY (component_id, user_id)
+);
+```
+
+**Example Data**:
+```sql
+INSERT INTO components VALUES 
+  ('carousel_featured', 123, 'Carousel', 1),
+  ('grid_all_offers', 123, 'ProductGrid', 2);
+```
+
+### Widgets Table
+
+```sql
+CREATE TABLE widgets (
+    user_id INTEGER NOT NULL,
+    widget_id VARCHAR(100) PRIMARY KEY,
+    component_type VARCHAR(50) NOT NULL,
+    priority INTEGER DEFAULT 0,
+    data JSONB NOT NULL,
+    component_id VARCHAR(100) DEFAULT 'default_component',
+    FOREIGN KEY (component_id, user_id) 
+        REFERENCES components(component_id, user_id)
+        ON DELETE CASCADE
+);
+```
+
+**Example Data**:
+```sql
+INSERT INTO widgets VALUES (
+  123,
+  'car_offer_devk_123',
+  'Card',
+  10,
+  '{"title": "DEVK Insurance", "pricing": {"price": 45.99}}'::jsonb,
+  'carousel_featured'
+);
+```
+
+### Contracts Table
+
+```sql
+CREATE TABLE contracts (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    widget_id VARCHAR(100) NOT NULL,
+    type VARCHAR(50),
+    UNIQUE (user_id, widget_id)
+);
+```
+
+**SQLAlchemy Models**:
+```python
+from sqlalchemy import Column, Integer, String, ForeignKeyConstraint
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship, declarative_base
+
+Base = declarative_base()
+
+class Component(Base):
+    __tablename__ = 'components'
+    
+    component_id = Column(String(100), primary_key=True)
+    user_id = Column(Integer, primary_key=True, nullable=False)
+    component_type = Column(String(50), nullable=False)
+    component_order = Column(Integer, default=0)
+    
+    widgets = relationship("Widget", back_populates="component")
+
+class Widget(Base):
+    __tablename__ = 'widgets'
+    
+    user_id = Column(Integer, nullable=False)
+    widget_id = Column(String(100), primary_key=True)
+    component_type = Column(String(50), nullable=False)
+    priority = Column(Integer, default=0)
+    data = Column(JSONB, nullable=False)
+    component_id = Column(String(100), default='default_component')
+    
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['component_id', 'user_id'],
+            ['components.component_id', 'components.user_id'],
+            ondelete='CASCADE'
+        ),
+    )
+    
+    component = relationship("Component", back_populates="widgets")
+    
+    def to_sdui_format(self):
+        return {
+            "widget_id": self.widget_id,
+            "component_id": self.component_id,
+            "component_type": self.component_type,
+            "priority": self.priority,
+            "data": self.data
+        }
+```
+
+---
+
+## Best Practices
+
+### 1. Widget Design
+
+**DO**:
+- ✅ Keep widget data concise (avoid large JSON blobs)
+- ✅ Use high-quality images (CDN URLs)
+- ✅ Provide clear CTAs
+- ✅ Include pricing when relevant
+- ✅ Use badges sparingly ("Best Value", "Popular")
+
+**DON'T**:
+- ❌ Return 100+ widgets (limit to 10-20 most relevant)
+- ❌ Include PII in widget data (use widget_id as reference)
+- ❌ Return stale pricing (ensure data freshness)
+- ❌ Use inconsistent component grouping
+
+### 2. Performance
+
+**DO**:
+- ✅ Index database columns used in WHERE clauses
+- ✅ Limit query results (pagination)
+- ✅ Use connection pooling
+- ✅ Cache expensive computations
+
+**DON'T**:
+- ❌ Make N+1 queries (use JOINs)
+- ❌ Fetch all user data (select only needed columns)
+- ❌ Block on external API calls (use async)
+
+### 3. Event Publishing
+
+**DO**:
+- ✅ Publish events asynchronously (don't block HTTP response)
+- ✅ Include all relevant metadata in events
+- ✅ Use structured event schemas
+- ✅ Handle Kafka failures gracefully
+
+**DON'T**:
+- ❌ Retry infinitely on Kafka failure (exponential backoff)
+- ❌ Publish events without invalidating cache first
+- ❌ Include sensitive data in events
+
+### 4. Error Handling
+
+**DO**:
+- ✅ Return meaningful error messages
+- ✅ Log errors with stack traces
+- ✅ Use appropriate HTTP status codes
+- ✅ Degrade gracefully (return empty widgets vs 500 error)
+
+**DON'T**:
+- ❌ Expose internal errors to clients
+- ❌ Crash on database connection loss
+- ❌ Return HTML error pages (JSON only)
 
 ---
 
 ## Troubleshooting
 
-### Issue 1: Widgets Not Showing on Home
+### Problem: Widgets not showing on Home page
 
-**Symptoms**: Your widgets don't appear on the Home page
+**Check**:
+1. Is your service healthy? `curl http://localhost:8001/health`
+2. Does widget endpoint return data? `curl http://localhost:8001/widget/car-insurance`
+3. Are widgets in correct format? Validate JSON schema
+4. Check Core Service logs: `docker-compose logs core-service`
 
-**Checklist**:
-1. ✅ Service is running: `curl http://your-service:8001/health`
-2. ✅ Widget endpoint returns data: `curl http://your-service:8001/widget/your-product`
-3. ✅ Core Service can reach your service: Check network/firewall
-4. ✅ Circuit breaker is closed: Check Core Service logs for "Circuit OPEN"
-5. ✅ Response time <5s: Slow services get timed out
+**Common Causes**:
+- User has active contract (widgets hidden by design)
+- Database connection failed
+- JSON schema validation failed
+- Circuit breaker is OPEN (too many failures)
 
-**Debug Steps**:
-```bash
-# Check Core Service logs
-docker logs core-service | grep "your-product"
+---
 
-# Check circuit breaker state
-curl http://core-service:8000/debug/circuit-breaker-status
-```
+### Problem: Cache not invalidating after contract creation
 
-### Issue 2: Cache Not Invalidating
+**Check**:
+1. Is HTTP POST `/cache/invalidate` being called?
+2. Check HTTP response status (should be 200)
+3. Is Kafka event published?
+4. Check Kafka consumer logs: `docker-compose logs core-service | grep kafka`
 
-**Symptoms**: Contract created but old widgets still shown
+**Common Causes**:
+- Core Service URL incorrect in `.env`
+- Kafka broker unreachable
+- Event published to wrong topic
+- Race condition (client refetches before invalidation)
 
-**Checklist**:
-1. ✅ Kafka event published: Check Kafka UI for messages
-2. ✅ Core Service consumer running: Check logs for "Kafka Consumer started"
-3. ✅ Redis accessible: `docker exec redis redis-cli PING`
-4. ✅ Cache invalidation called: Check logs for "Cache invalidated"
+---
 
-**Debug Steps**:
-```bash
-# Check Kafka messages
-docker exec kafka kafka-console-consumer \
-  --bootstrap-server localhost:9092 \
-  --topic user.your-product.purchased \
-  --from-beginning
+### Problem: High response times
 
-# Check Redis cache manually
-docker exec redis redis-cli GET "sdui:home_page:v1"
+**Check**:
+1. Database query performance: `EXPLAIN ANALYZE <query>`
+2. Number of widgets returned (limit to 10-20)
+3. External API calls blocking
+4. Connection pool exhaustion
 
-# Manually invalidate cache
-curl -X POST http://core-service:8000/cache/invalidate
-```
+**Solutions**:
+- Add database indexes
+- Limit query results
+- Use async HTTP clients
+- Increase connection pool size
 
-### Issue 3: Slow Widget Retrieval
+---
 
-**Symptoms**: Widget endpoint takes >5 seconds
+### Problem: Circuit breaker OPEN
 
-**Checklist**:
-1. ✅ Database query optimized: Use `EXPLAIN ANALYZE`
-2. ✅ No external API calls: Timeout or cache externally
-3. ✅ Connection pool not exhausted: Check pool size
-4. ✅ No heavy computation: Profile with `cProfile`
+**Check**:
+1. Core Service logs: `docker-compose logs core-service | grep CircuitBreaker`
+2. Your service error rate
+3. Database availability
 
-**Debug Steps**:
-```python
-# Add timing logs
-import time
-
-start = time.time()
-widgets = get_widgets(user_id)
-elapsed = time.time() - start
-logger.info(f"Widget retrieval took {elapsed:.2f}s")
-```
-
-### Issue 4: JSON Validation Errors
-
-**Symptoms**: Clients reject your widget JSON
-
-**Checklist**:
-1. ✅ Valid JSON syntax: Use `jq` or JSON validator
-2. ✅ All required fields present: `widget_id`, `component_type`, `data`
-3. ✅ Correct data types: `price` is number, not string
-4. ✅ No extra top-level fields: Only `widget_id`, `component_type`, `priority`, `data`
-
-**Debug Steps**:
-```bash
-# Validate JSON response
-curl http://your-service:8001/widget/your-product | jq .
-
-# Check for required fields
-curl http://your-service:8001/widget/your-product | \
-  jq '.widgets[] | select(.widget_id == null or .component_type == null)'
-```
+**Recovery**:
+- Fix underlying issue (database, bug, etc.)
+- Wait 10 seconds (circuit breaker will try HALF_OPEN)
+- Manually reset: `curl -X POST http://localhost:8000/debug/reset-circuit-breaker`
 
 ---
 
 ## FAQ
 
-### Q1: Can I use a different tech stack (Node.js, Go, Java)?
+### Q: How do I add a new widget type?
 
-**A**: Yes! The API contract is language-agnostic. As long as you:
-- Return valid JSON (`GET /widget/{product}`)
-- Publish Kafka events
-- Call Core Service cache invalidation
-- Respond within 5 seconds
+**A**: Just create new widget data in your database with a different `component_type`. Clients will render it based on the type.
 
-You can use any technology.
-
-### Q2: How many widgets should I return?
-
-**A**: **3-6 widgets** is optimal. More widgets = slower Home page load + worse UX.
-
-### Q3: Can I show widgets to users who already have a contract?
-
-**A**: Yes, but consider the use case:
-- ✅ Upsell/cross-sell: "Upgrade to premium plan"
-- ✅ Related products: "Add travel insurance to your car insurance"
-- ❌ Same offer again: "Buy car insurance" (when they already have it)
-
-### Q4: How do I test on staging environment?
-
-**A**: Connect to staging Core Service:
-```python
-CORE_SERVICE_URL = "https://staging-core.check24.de"
+```sql
+INSERT INTO widgets VALUES (
+  123, 'new_widget', 'InfoBox', 5,
+  '{"header": "Did You Know?", "body": "..."}'::jsonb,
+  'infobox_tips'
+);
 ```
 
-Ensure your service is registered in Core Service config.
+---
 
-### Q5: What happens if my service is down?
+### Q: Can I change the JSON schema?
 
-**A**: Core Service circuit breaker opens → Fallback widget shown → Home page stays up.
+**A**: Minor additions (new optional fields) are OK. Breaking changes require versioning.
 
-### Q6: Can I change widget layout without Core Service deploy?
-
-**A**: Yes! Change JSON structure:
-```json
-// Before (2 columns)
-{"component_type": "Card", ...}
-
-// After (full width)
-{"component_type": "FullWidthCard", ...}
-```
-
-Clients will re-render automatically (no deploy needed).
-
-### Q7: How do I track widget impressions/clicks?
-
-**A**: Add tracking IDs to your widgets:
+**Safe**:
 ```json
 {
-  "widget_id": "car_offer_123",
   "data": {
-    "tracking_id": "campaign_summer_2025",
-    "cta_link": "/compare?utm_source=home&utm_campaign=summer_2025"
+    "title": "...",
+    "new_field": "..."  // ✅ Optional field added
   }
 }
 ```
 
-Track clicks via your analytics system.
-
-### Q8: Can I use custom fonts/styles?
-
-**A**: No. Clients use platform-specific design systems:
-- Web: CHECK24 CSS theme
-- iOS: UIKit / SwiftUI styles
-- Android: Material Design 3
-
-Your JSON defines content, not presentation.
-
-### Q9: How do I handle multi-language support?
-
-**A**: Return localized text based on user preference:
-```python
-def get_widgets(user_id):
-    locale = get_user_locale(user_id)  # "de_DE", "en_US"
-    if locale == "de_DE":
-        title = "Kfz-Versicherung"
-    else:
-        title = "Car Insurance"
-    return [{"data": {"title": title, ...}}]
+**Breaking**:
+```json
+{
+  "data": {
+    "heading": "..."  // ❌ Renamed "title" to "heading"
+  }
+}
 ```
 
-### Q10: What's the rollback process if my widget breaks?
-
-**A**: Two options:
-1. **Quick fix**: Deploy updated widget JSON (5 minutes)
-2. **Emergency**: Ask Core team to disable your service endpoint (2 minutes)
+For breaking changes, coordinate with Core team for API versioning strategy.
 
 ---
 
-## Support & Resources
+### Q: How do I handle user authentication?
 
-### Documentation
-- **API Reference**: https://docs.check24.de/widgets/api
-- **Component Gallery**: https://docs.check24.de/widgets/components
-- **Performance Guide**: https://docs.check24.de/widgets/performance
+**A**: In production, Core Service will pass user context (JWT token, user_id) in request headers. For now, hardcode user_id = 123 for testing.
 
-### Contact
-- **Core Team**: core-engineering@check24.de
-- **Slack Channel**: #home-widgets-support
-- **Emergency Hotline**: +49 123 456 7890
-
-### Office Hours
-- **Weekly Sync**: Tuesdays 10:00 CET (optional)
-- **Q&A Session**: Thursdays 14:00 CET (open to all)
+**Future**:
+```python
+@app.get("/widget/car-insurance")
+def get_widgets(
+    user_id: int = Header(...),  # From Core Service
+    db: Session = Depends(get_db)
+):
+    # Fetch widgets for this user
+```
 
 ---
 
-## Changelog
+### Q: Can I show widgets even if user has a contract?
 
-**v1.0** (2025-12-19):
-- Initial release
-- Added Card, InfoBox, ProductGrid, SectionHeader components
-- SWR caching with 1-hour TTL
-- Kafka-based cache invalidation
+**A**: Yes! The "hide widgets if contract exists" is just the reference implementation. You control the logic.
+
+**Example**:
+```python
+# Show upsell widgets to existing customers
+if has_contract:
+    return get_upsell_widgets(user_id)
+else:
+    return get_acquisition_widgets(user_id)
+```
 
 ---
 
-*Last Updated: December 19, 2025*  
-*Version: 1.0*  
-*Maintained by: Core Engineering Team*
+### Q: How do I test cache invalidation locally?
+
+**A**:
+```bash
+# 1. Create contract
+curl -X POST http://localhost:8001/widget/car-insurance/contract \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 123, "widget_id": "test"}'
+
+# 2. Check Core Service received invalidation
+docker-compose logs core-service | grep "invalidate"
+
+# 3. Verify widgets hidden
+curl http://localhost:8000/home | jq '.services.car_insurance.components'
+```
+
+---
+
+### Q: What if my service is temporarily down?
+
+**A**: Core Service has circuit breakers. After 5 failures, it will:
+1. Return fallback widgets (generic error message)
+2. Stop calling your service for 10 seconds
+3. Try again (HALF_OPEN state)
+
+Your downtime does NOT crash the Home page.
+
+---
+
+### Q: How do I deploy updates without downtime?
+
+**A**: Use blue-green deployment:
+1. Deploy new version to separate containers
+2. Health check passes
+3. Update load balancer to route traffic to new version
+4. Keep old version running for 5 minutes (in-flight requests)
+5. Shut down old version
+
+Core Service will continue serving cached data during deployment.
+
+---
+
+**Next Steps**:
+1. Clone reference implementation
+2. Set up local environment
+3. Implement widget endpoint
+4. Test integration with Core Service
+5. Deploy to staging
+6. Request production access
+
+Good luck! 🚀
+

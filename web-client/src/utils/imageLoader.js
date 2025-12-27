@@ -1,29 +1,24 @@
-// Import both company logos and car images
-const companyImages = import.meta.glob('../assets/images/companies/*.svg', { eager: true });
-const carImages = import.meta.glob('../assets/images/cars/*.*', { eager: true });
+const allImages = import.meta.glob('../assets/images/**/*', { eager: true });
 
-export const getImageUrl = (imagePath) => {
-  // 1. Check if imagePath is a valid string
-  if (typeof imagePath !== 'string' || !imagePath.length) {
-    return null; 
+// Create a map that matches DB
+
+const imageLookup = Object.fromEntries(
+  Object.entries(allImages).map(([path, module]) => {
+    const cleanKey = path.replace('../', ''); 
+    return [cleanKey, module.default];
+  })
+);
+
+export const getImageUrl = (dbPath) => {
+  if (!dbPath) return null;
+
+  // Direct lookup from the mapped object
+  const resolvedPath = imageLookup[dbPath];
+
+  if (!resolvedPath) {
+    console.warn(`Asset not found for database path: ${dbPath}`);
+    return null;
   }
-  
-  // 2. Extract filename from path
-  const filename = imagePath.split('/').pop();
-  
-  // 3. Try company images first
-  const companyKey = `../assets/images/companies/${filename}`;
-  if (companyImages[companyKey]) {
-    return companyImages[companyKey].default;
-  }
-  
-  // 4. Try car images
-  const carKey = `../assets/images/cars/${filename}`;
-  if (carImages[carKey]) {
-    return carImages[carKey].default;
-  }
-  
-  // 5. Return null if not found
-  console.warn(`Image not found: ${imagePath}`);
-  return null;
+
+  return resolvedPath;
 };

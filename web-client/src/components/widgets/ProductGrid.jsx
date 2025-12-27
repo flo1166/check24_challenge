@@ -4,8 +4,8 @@
  * =========================================================================
  * Displays products in a responsive grid layout (min 2x2, grows as needed).
  * Uses CardSimple for clean product display.
+ * Adapts grid columns based on number of products.
  */
-
 import React from 'react';
 import CardSimple from './CardSimple'; 
 import { getImageUrl } from '../../utils/imageLoader';
@@ -18,7 +18,7 @@ export default function ProductGrid({ widgetData, onAddToCart }) {
     widgetData?.products ||
     widgetData?.data?.data?.products ||
     []; 
-
+  
   // Safely extract the title
   const title = widgetData?.title || widgetData?.data?.title || 'Featured Deals';
   
@@ -36,6 +36,26 @@ export default function ProductGrid({ widgetData, onAddToCart }) {
     image_url: getImageUrl(product.image_url) || product.image_url
   }));
 
+  // Determine grid columns based on number of products
+  const productCount = processedProducts.length;
+  
+  // Dynamic grid classes based on product count
+  const getGridClasses = () => {
+    if (productCount === 1) {
+      // Single product: 1 column on all screens
+      return "grid grid-cols-1 max-w-md mx-auto gap-6 w-full";
+    } else if (productCount === 2) {
+      // Two products: 1 col mobile, 2 cols tablet+
+      return "grid grid-cols-1 md:grid-cols-2 gap-6 w-full";
+    } else if (productCount === 3) {
+      // Three products: 1 col mobile, 2 cols tablet, 3 cols desktop
+      return "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full";
+    } else {
+      // Four or more: full responsive grid
+      return "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full";
+    }
+  };
+
   return (
     <div className="product-grid-widget mb-8 w-full"> 
       {/* Widget Title */}
@@ -44,16 +64,14 @@ export default function ProductGrid({ widgetData, onAddToCart }) {
       </h2>
 
       {/* 
-        Grid Container: 
-        - Mobile: 1 column
-        - Tablet (md): 2 columns (2x2 minimum)
-        - Desktop (lg): 3 columns
-        - Large Desktop (xl): 4 columns
-        
-        The grid will automatically grow with more cards while maintaining
-        this responsive structure.
+        Dynamic Grid Container: 
+        - Adapts column count based on number of products
+        - 1 product: Centered single column
+        - 2 products: 2 columns on tablet+
+        - 3 products: Up to 3 columns
+        - 4+ products: Up to 4 columns on large screens
       */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 w-full">
+      <div className={getGridClasses()}>
         {processedProducts.map((product, index) => (
           <div key={product.id || product.title || index} className="h-full">
             <CardSimple data={product} />
