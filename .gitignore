@@ -104,8 +104,6 @@ web-client/src/utils/info.txt
 =======
 node_modules/
 project_structure.txt
-mock-product-service/app/core/logging_config.py
-core-service/app/core/logging_config.py
 core-service/logs/core-service.log
 mock-product-service/logs/mock-service.log
 web-client/src/contexts/info.txt
