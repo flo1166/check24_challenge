@@ -54,16 +54,6 @@ This repository contains a complete implementation of the **CHECK24 Home Widgets
 ### Live Deployed
 **Demo URL:** [https://check24-challenge-gamma.vercel.app/](https://check24-challenge-gamma.vercel.app/)
 
-#### Backend (only one postgressql database (free tier))
-* **Car Insurance Service:** [https://check24-challenge-car-insurance-service2.onrender.com](https://check24-challenge-car-insurance-service2.onrender.com)
-* **Health Insurance Service:** [https://check24-challenge-health-insurance-jvta.onrender.com](https://check24-challenge-health-insurance-jvta.onrender.com)
-* **House Insurance Service:** [https://check24-challenge-house-insurance.onrender.com/](https://check24-challenge-house-insurance.onrender.com/)
-* **Banking Service:** [https://check24-challenge-banking-service2.onrender.com](https://check24-challenge-banking-service2.onrender.com)
-
-Can be tested by:
-https://check24-challenge-car-insurance-service2.onrender.com/widget/car-insurance
-https://check24-challenge-banking-service2.onrender.com/widget/banking 
-
 ---
 
 ## 🏗️ Architecture Overview
