@@ -147,24 +147,21 @@ This repository contains a complete implementation of the **CHECK24 Home Widgets
 │   ├── package.json
 │   └── vite.config.js
 │
-├── android-client/                 # Kotlin + Jetpack Compose
-│   ├── app/src/main/
-│   │   ├── kotlin/
-│   │   │   ├── data/
-│   │   │   │   ├── api/ApiService.kt
-│   │   │   │   ├── model/Models.kt
-│   │   │   │   └── repository/Check24Repository.kt
-│   │   │   ├── ui/
-│   │   │   │   ├── components/     # Composable widgets
-│   │   │   │   ├── screens/HomeScreen.kt
-│   │   │   │   └── theme/          # Material 3 theme
-│   │   │   └── MainActivity.kt
-│   │   └── res/
-│   ├── build.gradle.kts
-│   └── settings.gradle.kts
-│
-└── ios-client/                     # Swift + SwiftUI (future work)
-    └── README.md                   # Placeholder
+└── android-client/                 # Kotlin + Jetpack Compose
+    ├── app/src/main/
+    │   ├── kotlin/
+    │   │   ├── data/
+    │   │   │   ├── api/ApiService.kt
+    │   │   │   ├── model/Models.kt
+    │   │   │   └── repository/Check24Repository.kt
+    │   │   ├── ui/
+    │   │   │   ├── components/     # Composable widgets
+    │   │   │   ├── screens/HomeScreen.kt
+    │   │   │   └── theme/          # Material 3 theme
+    │   │   └── MainActivity.kt
+    │   └── res/
+    ├── build.gradle.kts
+    └── settings.gradle.kts
 ```
 
 ---
